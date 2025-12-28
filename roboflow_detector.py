@@ -19,7 +19,7 @@ class RoboflowDetector:
     def __init__(self):
         self.use_http = False
         self.workspace_name = "cable-evfad"
-        self.workflow_id = "find-cables-and-stripes-on-the-cables"
+        self.workflow_id = "find-white-stripes-yellow-stripes-blue-stripes-pink-stripes-and-green-stripes"
         self.api_key = "os34K4b17ImpAhsyrIiz"
         self.api_url = "https://serverless.roboflow.com"
         
