@@ -1,0 +1,12 @@
+opencv-python>=4.10.0
+numpy>=2.0.0
+Pillow>=10.4.0
+customtkinter>=5.2.0
+scikit-image>=0.22.0
+ultralytics>=8.0.0
+torch>=2.0.0
+torchvision>=0.15.0
+inference_sdk>=0.9.0
+roboflow>=1.2.0
+requests>=2.23.0
+
