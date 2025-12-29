@@ -25,15 +25,16 @@ class CableMarkerApp:
         
         # Professional color palette
         self.colors = {
-            "primary": "#1E88E5",
-            "primary_dark": "#1565C0",
-            "secondary": "#43A047",
-            "accent": "#FF6F00",
+            "primary": "#2563EB",  # Professional blue
+            "primary_dark": "#1E40AF",  # Darker blue for hover
+            "button": "#2D2D2D",  # Unified button color
+            "button_hover": "#3D3D3D",  # Unified button hover
             "background": "#121212",
             "surface": "#1E1E1E",
             "surface_light": "#2D2D2D",
             "text_primary": "#FFFFFF",
             "text_secondary": "#B0B0B0",
+            "border": "#404040",  # Subtle borders
             "success": "#4CAF50",
             "warning": "#FF9800",
             "error": "#F44336",
@@ -172,10 +173,12 @@ class CableMarkerApp:
             command=self.load_image,
             height=48,
             font=ctk.CTkFont(size=14, weight="bold"),
-            fg_color=self.colors["primary"],
-            hover_color=self.colors["primary_dark"],
+            fg_color=self.colors["button"],
+            hover_color=self.colors["button_hover"],
             corner_radius=8,
-            border_spacing=10
+            border_spacing=10,
+            border_width=1,
+            border_color=self.colors["border"]
         )
         self.load_btn.pack(fill="x", pady=(0, 8))
         
@@ -209,9 +212,11 @@ class CableMarkerApp:
             command=self.start_camera,
             height=48,
             font=ctk.CTkFont(size=14, weight="bold"),
-            fg_color=self.colors["accent"],
-            hover_color="#E65100",
+            fg_color=self.colors["button"],
+            hover_color=self.colors["button_hover"],
             corner_radius=8,
+            border_width=1,
+            border_color=self.colors["border"],
             state="disabled"
         )
         self.camera_start_btn.pack(fill="x", pady=(0, 8))
@@ -222,9 +227,11 @@ class CableMarkerApp:
             command=self.stop_camera,
             height=42,
             font=ctk.CTkFont(size=13),
-            fg_color=self.colors["error"],
-            hover_color="#D32F2F",
+            fg_color=self.colors["button"],
+            hover_color=self.colors["button_hover"],
             corner_radius=8,
+            border_width=1,
+            border_color=self.colors["border"],
             state="disabled"
         )
         self.camera_stop_btn.pack(fill="x", pady=(0, 8))
@@ -235,9 +242,11 @@ class CableMarkerApp:
             command=self.capture_frame,
             height=42,
             font=ctk.CTkFont(size=13),
-            fg_color=self.colors["secondary"],
-            hover_color="#388E3C",
+            fg_color=self.colors["button"],
+            hover_color=self.colors["button_hover"],
             corner_radius=8,
+            border_width=1,
+            border_color=self.colors["border"],
             state="disabled"
         )
         self.capture_btn.pack(fill="x", pady=(0, 15))
@@ -292,24 +301,6 @@ class CableMarkerApp:
         )
         self.filter_info_label.pack(padx=12, pady=(0, 10))
         
-        # Control buttons with modern styling
-        btn_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=5)
-        
-        self.detect_btn = ctk.CTkButton(
-            btn_frame,
-            text="Detect Markers",
-            command=self.detect_markers,
-            height=50,
-            font=ctk.CTkFont(size=15, weight="bold"),
-            fg_color=self.colors["secondary"],
-            hover_color="#388E3C",
-            corner_radius=8,
-            border_spacing=10,
-            state="disabled"
-        )
-        self.detect_btn.pack(fill="x", pady=(0, 8))
-        
         # Secondary actions
         secondary_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
         secondary_frame.pack(fill="x", padx=20, pady=5)
@@ -320,9 +311,11 @@ class CableMarkerApp:
             command=self.reset_view,
             height=42,
             font=ctk.CTkFont(size=13),
-            fg_color=self.colors["surface_light"],
-            hover_color="#3D3D3D",
+            fg_color=self.colors["button"],
+            hover_color=self.colors["button_hover"],
             corner_radius=8,
+            border_width=1,
+            border_color=self.colors["border"],
             state="disabled"
         )
         self.reset_btn.pack(fill="x", pady=(0, 6))
@@ -333,9 +326,11 @@ class CableMarkerApp:
             command=self.save_results,
             height=42,
             font=ctk.CTkFont(size=13),
-            fg_color=self.colors["surface_light"],
-            hover_color="#3D3D3D",
+            fg_color=self.colors["button"],
+            hover_color=self.colors["button_hover"],
             corner_radius=8,
+            border_width=1,
+            border_color=self.colors["border"],
             state="disabled"
         )
         self.save_btn.pack(fill="x", pady=(0, 6))
@@ -346,9 +341,11 @@ class CableMarkerApp:
             command=self.export_data,
             height=42,
             font=ctk.CTkFont(size=13),
-            fg_color=self.colors["surface_light"],
-            hover_color="#3D3D3D",
+            fg_color=self.colors["button"],
+            hover_color=self.colors["button_hover"],
             corner_radius=8,
+            border_width=1,
+            border_color=self.colors["border"],
             state="disabled"
         )
         self.export_btn.pack(fill="x", pady=(0, 6))
@@ -539,23 +536,26 @@ class CableMarkerApp:
             self.current_display = self.original_image.copy()
             self.display_image(self.current_display)
             
-            # Enable buttons
-            self.detect_btn.configure(state="normal")
+            # Enable reset button
             self.reset_btn.configure(state="normal")
             
             # Clear previous results
             self.detected_markers = []
             self.all_detected_markers = []
             self.results_text.delete("1.0", "end")
-            self.results_text.insert("1.0", "✓ Image loaded successfully.\n\nClick 'Detect Markers' to begin analysis.")
+            self.results_text.insert("1.0", "✓ Image loaded. Detecting markers automatically...")
             self.markers_count.configure(text="0")
             # Reset color filter to "All"
             self.color_filter_var.set("All")
             self.selected_color_filter = "All"
             
             filename = os.path.basename(file_path)
-            self.status_label.configure(text=f"Loaded: {filename}")
-            self.status_indicator.configure(text_color=self.colors["success"])
+            self.status_label.configure(text=f"Loading: {filename}...")
+            self.status_indicator.configure(text_color=self.colors["info"])
+            self.root.update()
+            
+            # Automatically detect markers
+            self.detect_markers()
             
     def display_image(self, image):
         """Display image on canvas"""
@@ -597,9 +597,8 @@ class CableMarkerApp:
         self.image_label.image = photo  # Keep reference
         
     def detect_markers(self):
-        """Run marker detection"""
+        """Run marker detection (automatically triggered)"""
         if self.original_image is None:
-            messagebox.showwarning("Warning", "Please load an image first!")
             return
         
         self.status_label.configure(text="Processing... Detecting markers")
@@ -971,8 +970,7 @@ class CableMarkerApp:
                 self.original_image = frame.copy()
                 self.current_display = frame.copy()
                 
-                # Enable detect button
-                self.detect_btn.configure(state="normal")
+                # Enable reset button
                 self.reset_btn.configure(state="normal")
             else:
                 break
@@ -990,12 +988,23 @@ class CableMarkerApp:
         
         # Clear previous results
         self.detected_markers = []
+        self.all_detected_markers = []
         self.results_text.delete("1.0", "end")
-        self.results_text.insert("1.0", "✓ Frame captured.\n\nClick 'Detect Markers' to begin analysis.")
+        self.results_text.insert("1.0", "✓ Frame captured. Detecting markers automatically...")
         self.markers_count.configure(text="0")
+        # Reset color filter to "All"
+        self.color_filter_var.set("All")
+        self.selected_color_filter = "All"
         
-        self.status_label.configure(text="Frame captured from camera")
-        self.status_indicator.configure(text_color=self.colors["success"])
+        # Set image_path to None for camera captures (for filename generation)
+        self.image_path = None
+        
+        self.status_label.configure(text="Frame captured. Detecting...")
+        self.status_indicator.configure(text_color=self.colors["info"])
+        self.root.update()
+        
+        # Automatically detect markers
+        self.detect_markers()
             
     def run(self):
         """Start the application"""
