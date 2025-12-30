@@ -9,6 +9,7 @@ from PIL import Image, ImageTk
 import cv2
 import numpy as np
 from roboflow_detector import RoboflowDetector
+from gpio_controller import GPIOController
 import os
 from datetime import datetime
 import threading
@@ -49,6 +50,9 @@ class CableMarkerApp:
         
         # Initialize Roboflow detector only
         self.detector = RoboflowDetector()
+        
+        # Initialize GPIO controller
+        self.gpio_controller = GPIOController(pin1=18, pin2=23, pin3=24)
         
         # Setup detection storage directory
         self.detections_dir = "detections"
@@ -633,6 +637,9 @@ class CableMarkerApp:
         if saved_path:
             print(f"💾 Detection image saved to: {saved_path}")
         
+        # Control GPIO pins based on detected colors
+        self.gpio_controller.process_detected_colors(self.detected_markers)
+        
         # Enable export buttons
         self.save_btn.configure(state="normal")
         self.export_btn.configure(state="normal")
@@ -673,6 +680,9 @@ class CableMarkerApp:
                 )
                 self.display_image(self.processed_image)
                 self.update_results()
+                
+                # Update GPIO pins based on filtered results
+                self.gpio_controller.process_detected_colors(self.detected_markers)
                 
                 # Update status
                 marker_count = len(self.detected_markers)
@@ -1012,6 +1022,8 @@ class CableMarkerApp:
         def on_closing():
             if self.camera_active:
                 self.stop_camera()
+            # Cleanup GPIO
+            self.gpio_controller.cleanup()
             self.root.destroy()
         
         self.root.protocol("WM_DELETE_WINDOW", on_closing)
