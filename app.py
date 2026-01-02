@@ -769,7 +769,9 @@ class CableMarkerApp:
             results_text += f"┌─ Cable #{cable_id}\n"
             results_text += f"│  Color: {primary_color}\n"
             results_text += f"│  Confidence: {confidence:.1f}%\n"
-            results_text += f"│  Pattern: {'|' * marker['stripe_count']}\n"
+            stripe_count = marker.get('stripe_count', 3)
+            stripes_in_group = marker.get('stripes_in_group', stripe_count)
+            results_text += f"│  Pattern: {'|' * stripe_count} ({stripes_in_group} stripes = 1 marking)\n"
             
             bbox = marker['bounding_box']
             results_text += f"│  Position: ({bbox['x']}, {bbox['y']})\n"
@@ -781,7 +783,8 @@ class CableMarkerApp:
                 results_text += "└\n"
         
         results_text += "\n" + "─" * 40 + "\n"
-        results_text += f"Total: {len(self.detected_markers)} marker(s) detected\n"
+        total_stripes = sum(m.get('stripes_in_group', m.get('stripe_count', 3)) for m in self.detected_markers)
+        results_text += f"Total: {len(self.detected_markers)} marking(s) detected ({total_stripes} stripes total)\n"
         
         self.results_text.insert("1.0", results_text)
         

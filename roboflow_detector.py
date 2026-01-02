@@ -39,6 +39,19 @@ class RoboflowDetector:
             print("❌ Roboflow HTTP client not initialized")
             return []
         
+        # Optimize image for faster processing
+        original_height, original_width = image.shape[:2]
+        processed_image = image.copy()
+        
+        # Resize large images to speed up detection (max 1920px on longest side)
+        max_dimension = 1920
+        if max(original_height, original_width) > max_dimension:
+            scale = max_dimension / max(original_height, original_width)
+            new_width = int(original_width * scale)
+            new_height = int(original_height * scale)
+            processed_image = cv2.resize(processed_image, (new_width, new_height), interpolation=cv2.INTER_AREA)
+            print(f"⚡ Resized image from {original_width}x{original_height} to {new_width}x{new_height} for faster detection")
+        
         # Save image to temporary file
         temp_file = None
         try:
@@ -47,8 +60,9 @@ class RoboflowDetector:
             temp_path = temp_file.name
             temp_file.close()
             
-            # Save image to file (convert BGR to RGB if needed, but OpenCV saves BGR correctly)
-            success = cv2.imwrite(temp_path, image)
+            # Save with optimized JPEG quality (85% for good quality but smaller file)
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 85]
+            success = cv2.imwrite(temp_path, processed_image, encode_params)
             if not success:
                 print(f"Error: Failed to save image to {temp_path}")
                 return []
@@ -57,16 +71,37 @@ class RoboflowDetector:
             with open(temp_path, 'rb') as f:
                 image_bytes = f.read()
             
+            print(f"📦 Image size: {len(image_bytes) / 1024:.1f} KB")
+            
             # Always use HTTP requests directly (matches website format exactly)
             result = self._run_workflow_http(image_bytes)
             
-            # Get image dimensions for coordinate conversion if needed
-            height, width = image.shape[:2]
+            # Get processed image dimensions for coordinate conversion
+            proc_height, proc_width = processed_image.shape[:2]
             
-            # Parse results
-            markers = self._parse_roboflow_results(result, image_width=width, image_height=height)
+            # Parse results (using processed image dimensions)
+            raw_markers = self._parse_roboflow_results(result, image_width=proc_width, image_height=proc_height)
             
-            return markers
+            # Scale coordinates back to original image size if resized
+            if max(original_height, original_width) > max_dimension:
+                scale_x = original_width / proc_width
+                scale_y = original_height / proc_height
+                for marker in raw_markers:
+                    bbox = marker["bounding_box"]
+                    marker["bounding_box"] = {
+                        "x": int(bbox["x"] * scale_x),
+                        "y": int(bbox["y"] * scale_y),
+                        "width": int(bbox["width"] * scale_x),
+                        "height": int(bbox["height"] * scale_y)
+                    }
+                    # Update center
+                    marker["center"] = (marker["bounding_box"]["x"] + marker["bounding_box"]["width"] // 2,
+                                       marker["bounding_box"]["y"] + marker["bounding_box"]["height"] // 2)
+            
+            # Group stripes into markings: 3 stripes = 1 marking
+            grouped_markers = self._group_stripes_into_markings(raw_markers)
+            
+            return grouped_markers
             
         except Exception as e:
             print(f"Error running Roboflow workflow: {e}")
@@ -111,9 +146,9 @@ class RoboflowDetector:
         }
         
         try:
-            # Make request
+            # Make request with reduced timeout for faster failure detection
             print("⏳ Sending request to Roboflow...")
-            response = self.requests.post(url, json=payload, headers=headers, timeout=30)
+            response = self.requests.post(url, json=payload, headers=headers, timeout=15)
             
             # Check status
             print(f"📊 Response status: {response.status_code}")
@@ -353,6 +388,94 @@ class RoboflowDetector:
             print(f"Result structure: {result}")
         
         return markers
+    
+    def _group_stripes_into_markings(self, stripes: List[Dict]) -> List[Dict]:
+        """
+        Group stripes into markings: 3 stripes = 1 marking
+        Groups nearby stripes of the same color together
+        """
+        if not stripes:
+            return []
+        
+        # Group stripes by color and proximity
+        grouped = []
+        used_indices = set()
+        
+        # Sort stripes by Y position (top to bottom) then X (left to right)
+        sorted_stripes = sorted(stripes, key=lambda s: (s["center"][1], s["center"][0]))
+        
+        for i, stripe in enumerate(sorted_stripes):
+            if i in used_indices:
+                continue
+            
+            # Start a new group with this stripe
+            group = [stripe]
+            used_indices.add(i)
+            color = stripe.get("primary_color", "Unknown")
+            group_center_y = stripe["center"][1]
+            
+            # Find nearby stripes of the same color
+            # Look for stripes within a reasonable distance (e.g., 200 pixels vertically)
+            max_distance = 200
+            
+            for j, other_stripe in enumerate(sorted_stripes[i+1:], start=i+1):
+                if j in used_indices:
+                    continue
+                
+                other_color = other_stripe.get("primary_color", "Unknown")
+                other_center_y = other_stripe["center"][1]
+                
+                # Check if same color and within distance
+                if color == other_color and abs(other_center_y - group_center_y) < max_distance:
+                    group.append(other_stripe)
+                    used_indices.add(j)
+                    
+                    # Update group center Y to average
+                    group_center_y = sum(s["center"][1] for s in group) / len(group)
+                    
+                    # Stop when we have 3 stripes (1 marking)
+                    if len(group) >= 3:
+                        break
+            
+            # Create a marking from the group
+            if group:
+                # Calculate combined bounding box
+                min_x = min(s["bounding_box"]["x"] for s in group)
+                min_y = min(s["bounding_box"]["y"] for s in group)
+                max_x = max(s["bounding_box"]["x"] + s["bounding_box"]["width"] for s in group)
+                max_y = max(s["bounding_box"]["y"] + s["bounding_box"]["height"] for s in group)
+                
+                # Calculate average confidence
+                avg_confidence = sum(s["confidence"] for s in group) / len(group)
+                
+                # Create marking
+                marking = {
+                    "component_id": len(grouped) + 1,
+                    "component_type": "Cable Marker",
+                    "primary_color": color,
+                    "color_pattern": [color],
+                    "bounding_box": {
+                        "x": min_x,
+                        "y": min_y,
+                        "width": max_x - min_x,
+                        "height": max_y - min_y
+                    },
+                    "confidence": round(avg_confidence, 2),
+                    "center": ((min_x + max_x) // 2, (min_y + max_y) // 2),
+                    "stripe_count": len(group),
+                    "stripes_in_group": len(group)  # Track how many stripes were grouped
+                }
+                
+                grouped.append(marking)
+        
+        # Sort grouped markings by position
+        grouped.sort(key=lambda m: (m["center"][1], m["center"][0]))
+        for idx, marking in enumerate(grouped):
+            marking["component_id"] = idx + 1
+        
+        print(f"📊 Grouped {len(stripes)} stripes into {len(grouped)} markings (3 stripes = 1 marking)")
+        
+        return grouped
     
     def draw_detections(self, image: np.ndarray, markers: List[Dict]) -> np.ndarray:
         """Draw detection results"""
