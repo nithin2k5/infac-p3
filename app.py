@@ -77,6 +77,7 @@ class CableMarkerApp:
         self.camera_active = False
         self.camera_index = 0
         self.capture_thread = None
+        self.show_detection_pause = False  # Flag to pause camera feed to show detection
         
         # Color filter
         self.selected_color_filter = "All"  # Default: detect all colors
@@ -652,6 +653,15 @@ class CableMarkerApp:
             text=f"Detection complete - Found {marker_count} marker(s){filter_text}{save_text}"
         )
         self.status_indicator.configure(text_color=self.colors["success"])
+        
+        # If camera is active, pause feed to show detection for 5 seconds
+        if self.camera_active:
+            self.show_detection_pause = True
+            self.status_label.configure(
+                text=f"Showing detection for 5 seconds... Found {marker_count} marker(s){filter_text}{save_text}"
+            )
+            # Resume camera feed after 5 seconds
+            self.root.after(5000, self.resume_camera_feed)
     
     def on_color_filter_changed(self, choice):
         """Handle color filter selection change"""
@@ -947,6 +957,7 @@ class CableMarkerApp:
     def stop_camera(self):
         """Stop camera feed"""
         self.camera_active = False
+        self.show_detection_pause = False  # Reset pause flag
         if self.camera:
             self.camera.release()
             self.camera = None
@@ -968,6 +979,11 @@ class CableMarkerApp:
     def update_camera_feed(self):
         """Update camera feed in a separate thread"""
         while self.camera_active and self.camera:
+            # Skip updating if showing detection pause
+            if self.show_detection_pause:
+                time.sleep(0.1)  # Check less frequently when paused
+                continue
+                
             ret, frame = self.camera.read()
             if ret:
                 # Hide placeholder
@@ -1018,6 +1034,13 @@ class CableMarkerApp:
         
         # Automatically detect markers
         self.detect_markers()
+    
+    def resume_camera_feed(self):
+        """Resume camera feed after showing detection"""
+        if self.camera_active:
+            self.show_detection_pause = False
+            self.status_label.configure(text="Camera feed resumed")
+            self.status_indicator.configure(text_color=self.colors["info"])
             
     def run(self):
         """Start the application"""

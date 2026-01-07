@@ -1,0 +1,23 @@
+# Raspberry Pi Optimized Requirements
+# Lightweight dependencies for Raspberry Pi
+
+# Core image processing
+opencv-python>=4.10.0
+numpy>=1.24.0,<2.0.0  # Use numpy < 2.0 for better Raspberry Pi compatibility
+Pillow>=10.4.0
+
+# GUI
+customtkinter>=5.2.0
+
+# API and HTTP
+requests>=2.23.0
+roboflow>=1.2.0
+
+# Raspberry Pi GPIO (install separately on Raspberry Pi)
+# RPi.GPIO>=0.7.0  # Install with: pip install RPi.GPIO
+
+# Optional: For better performance on Raspberry Pi
+# Consider installing these if needed:
+# - picamera2 (for Raspberry Pi camera module)
+# - v4l2-python3 (for USB cameras)
+
