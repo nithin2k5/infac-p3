@@ -86,6 +86,7 @@ class CableMarkerApp:
         self.capture_countdown = 0
         self.last_check_time = 0
         self.check_interval = 0.5  # Check for stripes every 0.5 seconds
+        self.countdown_duration = 0.5  # Fast 0.5 second countdown before capture
         self.scene_locked = False  # Lock until scene changes
         
         # Filter
@@ -328,7 +329,7 @@ class CableMarkerApp:
     def create_main_display(self):
         """Create main image display area"""
         main = ctk.CTkFrame(
-            self.root,
+            self.root, 
             fg_color=self.colors["bg"],
             corner_radius=0
         )
@@ -370,7 +371,7 @@ class CableMarkerApp:
     def create_footer(self):
         """Create simple footer"""
         footer = ctk.CTkFrame(
-            self.root,
+            self.root, 
             height=35,
             fg_color=self.colors["surface"],
             corner_radius=0
@@ -393,7 +394,7 @@ class CableMarkerApp:
             text_color=self.colors["text_secondary"]
         )
         version.pack(side="right", padx=20)
-    
+        
     def load_image(self):
         """Load image from file"""
         file_path = filedialog.askopenfilename(
@@ -429,7 +430,7 @@ class CableMarkerApp:
             self.root.update()
             
             self.detect_markers()
-    
+            
     def display_image(self, image):
         """Display image on canvas"""
         if image is None:
@@ -466,7 +467,7 @@ class CableMarkerApp:
             self.image_label.image = photo
         except Exception as e:
             pass
-    
+        
     def detect_markers(self):
         """Run marker detection"""
         if self.original_image is None:
@@ -481,7 +482,7 @@ class CableMarkerApp:
         self.apply_color_filter()
         
         self.processed_image = self.detector.draw_detections(
-            self.original_image,
+            self.original_image, 
             self.detected_markers
         )
         
@@ -526,7 +527,7 @@ class CableMarkerApp:
         
         for idx, marker in enumerate(self.detected_markers, 1):
             marker["component_id"] = idx
-    
+        
     def update_results(self):
         """Update results display"""
         self.results_text.delete("1.0", "end")
@@ -559,14 +560,14 @@ class CableMarkerApp:
         results_text += f"Stripes: {total_stripes}\n"
         
         self.results_text.insert("1.0", results_text)
-    
+        
     def reset_view(self):
         """Reset to original image"""
         if self.original_image is not None:
             self.current_display = self.original_image.copy()
             self.display_image(self.current_display)
             self.status_label.configure(text="Reset to original image")
-    
+            
     def auto_save_detection(self):
         """Auto-save detection image"""
         if self.processed_image is None:
@@ -605,7 +606,7 @@ class CableMarkerApp:
             cv2.imwrite(file_path, self.processed_image)
             messagebox.showinfo("Success", f"Saved to:\n{file_path}")
             self.status_label.configure(text=f"Saved: {os.path.basename(file_path)}")
-    
+            
     def on_color_filter_changed(self, choice):
         """Handle color filter change"""
         if not choice:
@@ -723,8 +724,8 @@ class CableMarkerApp:
         
         def check():
             try:
-                # Quick check with lower resolution for speed
-                small_frame = cv2.resize(frame, (640, 480))
+                # Quick check with very low resolution for maximum speed
+                small_frame = cv2.resize(frame, (480, 360))
                 predictions = self.detector.detect_markers(small_frame)
                 
                 has_stripes = len(predictions) > 0
@@ -859,14 +860,14 @@ class CableMarkerApp:
                             if self.stripes_detected:
                                 self.waiting_for_capture = True
                                 countdown_start_time = current_time
-                                print("Stripes detected! Starting 2-second countdown...")
-                                self.root.after(0, lambda: self.status_label.configure(text="Stripes detected! Capturing in 2s..."))
+                                print(f"Stripes detected! Starting {self.countdown_duration}s countdown...")
+                                self.root.after(0, lambda: self.status_label.configure(text=f"Stripes detected! Capturing in {self.countdown_duration}s..."))
                                 self.root.after(0, lambda: self.header_status.configure(text="● Countdown", text_color=self.colors["warning"]))
                 
                 # Handle countdown
                 elif self.waiting_for_capture and countdown_start_time:
                     elapsed = current_time - countdown_start_time
-                    remaining = max(0, 2.0 - elapsed)
+                    remaining = max(0, self.countdown_duration - elapsed)
                     
                     if remaining > 0:
                         # Update countdown display
@@ -911,7 +912,7 @@ class CableMarkerApp:
         self.root.update()
         
         self.detect_markers()
-    
+            
     def toggle_auto_detect(self):
         """Toggle auto-detection"""
         self.auto_detect_enabled = self.auto_detect_var.get()
@@ -923,7 +924,7 @@ class CableMarkerApp:
         if self.camera_active:
             self.show_detection_pause = False
             self.status_label.configure(text="Camera feed resumed")
-    
+            
     def run(self):
         """Run application"""
         def on_closing():

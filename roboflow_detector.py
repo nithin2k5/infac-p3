@@ -49,8 +49,8 @@ class RoboflowDetector:
         original_height, original_width = image.shape[:2]
         processed_image = image.copy()
         
-        # Resize large images to speed up detection (max 1920px on longest side)
-        max_dimension = 1920
+        # Resize large images to speed up detection (max 1280px for faster processing)
+        max_dimension = 1280  # Reduced from 1920 for faster upload and processing
         if max(original_height, original_width) > max_dimension:
             scale = max_dimension / max(original_height, original_width)
             new_width = int(original_width * scale)
@@ -66,8 +66,8 @@ class RoboflowDetector:
             temp_path = temp_file.name
             temp_file.close()
             
-            # Save with optimized JPEG quality (85% for good quality but smaller file)
-            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 85]
+            # Save with optimized JPEG quality (75% for faster upload, still good quality)
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 75]
             success = cv2.imwrite(temp_path, processed_image, encode_params)
             if not success:
                 print(f"Error: Failed to save image to {temp_path}")
@@ -152,9 +152,9 @@ class RoboflowDetector:
         }
         
         try:
-            # Make request with reduced timeout for faster failure detection
+            # Make request with optimized timeout for speed
             print("⏳ Sending request to Roboflow...")
-            response = self.requests.post(url, json=payload, headers=headers, timeout=15)
+            response = self.requests.post(url, json=payload, headers=headers, timeout=8)
             
             # Check status
             print(f"📊 Response status: {response.status_code}")
