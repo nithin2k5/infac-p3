@@ -78,6 +78,16 @@ class CableMarkerApp:
         self.camera_index = 0
         self.capture_thread = None
         self.show_detection_pause = False  # Flag to pause camera feed to show detection
+        self.auto_detect_enabled = True  # Enable automatic detection on live feed
+        self.detection_interval = 2.0  # Run detection every 2 seconds
+        self.last_detection_time = 0  # Track last detection time
+        self.live_detected_markers = []  # Store markers detected from live feed
+        self.auto_detect_var = None  # Will be set in UI setup
+        self.detection_running = False  # Flag to prevent multiple simultaneous detections
+        self.detection_thread = None  # Thread for running detection
+        self.latest_frame = None  # Store latest frame for detection
+        self.detections_drawn_frame = None  # Cache the frame with detections drawn
+        self.frame_lock = threading.Lock()  # Lock for thread-safe frame access
         
         # Color filter
         self.selected_color_filter = "All"  # Default: detect all colors
@@ -254,7 +264,29 @@ class CableMarkerApp:
             border_color=self.colors["border"],
             state="disabled"
         )
-        self.capture_btn.pack(fill="x", pady=(0, 15))
+        self.capture_btn.pack(fill="x", pady=(0, 8))
+        
+        # Auto-detection toggle
+        auto_detect_frame = ctk.CTkFrame(source_frame, fg_color="transparent")
+        auto_detect_frame.pack(fill="x", pady=(0, 15))
+        
+        self.auto_detect_var = ctk.BooleanVar(value=True)
+        self.auto_detect_switch = ctk.CTkSwitch(
+            auto_detect_frame,
+            text="Auto-detect on Live Feed",
+            variable=self.auto_detect_var,
+            command=self.toggle_auto_detect,
+            font=ctk.CTkFont(size=12)
+        )
+        self.auto_detect_switch.pack(side="left", padx=(0, 10))
+        
+        self.auto_detect_status = ctk.CTkLabel(
+            auto_detect_frame,
+            text="● ON",
+            font=ctk.CTkFont(size=11),
+            text_color=self.colors["success"]
+        )
+        self.auto_detect_status.pack(side="left")
         
         # Separator
         separator1 = ctk.CTkFrame(sidebar, height=1, fg_color=self.colors["surface_light"])
@@ -563,43 +595,45 @@ class CableMarkerApp:
             self.detect_markers()
             
     def display_image(self, image):
-        """Display image on canvas"""
+        """Display image on canvas - optimized for speed"""
         if image is None:
             return
         
-        # Hide placeholder
-        if self.placeholder:
-            self.placeholder.place_forget()
-        if hasattr(self, 'placeholder_icon'):
-            self.placeholder_icon.place_forget()
-        
-        # Convert BGR to RGB
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
-        # Get canvas dimensions
-        canvas_width = self.canvas_frame.winfo_width()
-        canvas_height = self.canvas_frame.winfo_height()
-        
-        # Scale image to fit
-        height, width = image_rgb.shape[:2]
-        
-        if canvas_width > 100 and canvas_height > 100:
+        try:
+            # Convert BGR to RGB (required for display)
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            
+            # Get canvas dimensions
+            canvas_width = self.canvas_frame.winfo_width()
+            canvas_height = self.canvas_frame.winfo_height()
+            
+            # Skip if canvas is too small
+            if canvas_width < 100 or canvas_height < 100:
+                return
+            
+            # Scale image to fit (use faster INTER_LINEAR)
+            height, width = image_rgb.shape[:2]
             scale = min(canvas_width / width, canvas_height / height) * 0.95
             new_width = int(width * scale)
             new_height = int(height * scale)
-            image_rgb = cv2.resize(image_rgb, (new_width, new_height))
-        
-        # Convert to PhotoImage
-        pil_image = Image.fromarray(image_rgb)
-        photo = ImageTk.PhotoImage(pil_image)
-        
-        # Display
-        if self.image_label is None:
-            self.image_label = ctk.CTkLabel(self.canvas_frame, text="")
-            self.image_label.place(relx=0.5, rely=0.5, anchor="center")
-        
-        self.image_label.configure(image=photo)
-        self.image_label.image = photo  # Keep reference
+            
+            # Fast resize with INTER_LINEAR (faster than default INTER_CUBIC)
+            image_rgb = cv2.resize(image_rgb, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+            
+            # Convert to PhotoImage
+            pil_image = Image.fromarray(image_rgb)
+            photo = ImageTk.PhotoImage(pil_image)
+            
+            # Display
+            if self.image_label is None:
+                self.image_label = ctk.CTkLabel(self.canvas_frame, text="")
+                self.image_label.place(relx=0.5, rely=0.5, anchor="center")
+            
+            self.image_label.configure(image=photo)
+            self.image_label.image = photo  # Keep reference
+        except Exception as e:
+            # Silently handle errors to avoid blocking
+            pass
         
     def detect_markers(self):
         """Run marker detection (automatically triggered)"""
@@ -939,6 +973,9 @@ class CableMarkerApp:
                 return
             
             self.camera_active = True
+            self.last_detection_time = 0  # Reset detection timer
+            self.live_detected_markers = []  # Clear previous detections
+            self.detections_drawn_frame = None  # Clear cached detection frame
             self.camera_start_btn.configure(state="disabled")
             self.camera_stop_btn.configure(state="normal")
             self.capture_btn.configure(state="normal")
@@ -948,7 +985,8 @@ class CableMarkerApp:
             self.capture_thread = threading.Thread(target=self.update_camera_feed, daemon=True)
             self.capture_thread.start()
             
-            self.status_label.configure(text=f"Camera {self.camera_index} active")
+            auto_status = "enabled" if self.auto_detect_enabled else "disabled"
+            self.status_label.configure(text=f"Camera {self.camera_index} active - Auto-detect {auto_status}")
             self.status_indicator.configure(text_color=self.colors["info"])
             
         except Exception as e:
@@ -976,8 +1014,76 @@ class CableMarkerApp:
         self.status_label.configure(text="Camera stopped")
         self.status_indicator.configure(text_color=self.colors["warning"])
     
+    def run_detection_async(self, frame):
+        """Run detection in a separate thread to avoid blocking camera feed"""
+        if self.detection_running:
+            return  # Skip if detection is already running
+        
+        self.detection_running = True
+        def detect():
+            try:
+                # Get all markers (this may take time with API call)
+                all_markers = self.detector.detect_markers(frame)
+                
+                # Apply color filter
+                temp_all = self.all_detected_markers
+                self.all_detected_markers = all_markers
+                self.apply_color_filter()
+                detected = self.detected_markers.copy()
+                self.all_detected_markers = temp_all
+                
+                # Draw detections once (cache the result)
+                if detected:
+                    display_frame = self.detector.draw_detections(frame, detected)
+                else:
+                    display_frame = frame.copy()  # No detections, cache clean frame
+                
+                # Thread-safe update of shared data
+                with self.frame_lock:
+                    self.live_detected_markers = detected
+                    self.detections_drawn_frame = display_frame
+                
+                print(f"✅ Detection complete: {len(detected)} marker(s) found")
+                
+                # Update UI in main thread (non-blocking)
+                self.root.after(0, self.update_results)
+                self.root.after(0, lambda: self.markers_count.configure(text=f"{len(detected)}"))
+                
+                # Control GPIO pins
+                self.gpio_controller.process_detected_colors(detected)
+                
+                # Update status
+                marker_count = len(detected)
+                if marker_count > 0:
+                    status_text = f"Live detection: {marker_count} marker(s) found"
+                    self.root.after(0, lambda t=status_text: self.status_label.configure(text=t))
+                    self.root.after(0, lambda: self.status_indicator.configure(text_color=self.colors["success"]))
+                else:
+                    self.root.after(0, lambda: self.status_label.configure(
+                        text="Live detection: No markers found"
+                    ))
+                    self.root.after(0, lambda: self.status_indicator.configure(text_color=self.colors["info"]))
+                
+            except Exception as e:
+                print(f"⚠️ Detection error in live feed: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                self.detection_running = False
+        
+        # Start detection in background thread (non-blocking)
+        self.detection_thread = threading.Thread(target=detect, daemon=True)
+        self.detection_thread.start()
+    
     def update_camera_feed(self):
-        """Update camera feed in a separate thread"""
+        """Update camera feed in a separate thread with automatic detection (non-blocking)"""
+        # Hide placeholder once
+        if self.placeholder:
+            self.root.after(0, lambda: self.placeholder.place_forget())
+        if hasattr(self, 'placeholder_icon'):
+            self.root.after(0, lambda: self.placeholder_icon.place_forget())
+        
+        frame_count = 0
         while self.camera_active and self.camera:
             # Skip updating if showing detection pause
             if self.show_detection_pause:
@@ -986,24 +1092,48 @@ class CableMarkerApp:
                 
             ret, frame = self.camera.read()
             if ret:
-                # Hide placeholder
-                if self.placeholder:
-                    self.placeholder.place_forget()
-                if hasattr(self, 'placeholder_icon'):
-                    self.placeholder_icon.place_forget()
+                frame_count += 1
                 
-                # Display frame
-                self.display_image(frame)
+                # Store reference (no copy for speed)
+                self.original_image = frame
                 
-                # Store as current image for detection
-                self.original_image = frame.copy()
-                self.current_display = frame.copy()
+                # Check if it's time to run detection (non-blocking)
+                current_time = time.time()
+                should_detect = (self.auto_detect_enabled and 
+                               not self.detection_running and
+                               (current_time - self.last_detection_time) >= self.detection_interval)
                 
-                # Enable reset button
-                self.reset_btn.configure(state="normal")
+                if should_detect:
+                    # Start detection in background thread (non-blocking)
+                    self.last_detection_time = current_time
+                    print(f"🔍 Starting detection at frame {frame_count}...")
+                    self.run_detection_async(frame.copy())
+                
+                # Display frame immediately (don't wait for detection)
+                # Use cached detection frame if available (thread-safe)
+                try:
+                    with self.frame_lock:
+                        if self.detections_drawn_frame is not None:
+                            # Use the pre-drawn detection frame (fast)
+                            display_frame = self.detections_drawn_frame
+                        else:
+                            # No detections yet, show raw frame
+                            display_frame = frame
+                except:
+                    # Fallback if lock fails
+                    display_frame = frame
+                
+                # Display frame (non-blocking, always smooth)
+                self.display_image(display_frame)
+                
+                # Enable reset button (only once)
+                if frame_count == 1:
+                    self.root.after(0, lambda: self.reset_btn.configure(state="normal"))
             else:
                 break
-            time.sleep(0.03)  # ~30 FPS
+            
+            # Sleep for smooth 30 FPS
+            time.sleep(0.033)
     
     def capture_frame(self):
         """Capture current frame from camera"""
@@ -1034,6 +1164,17 @@ class CableMarkerApp:
         
         # Automatically detect markers
         self.detect_markers()
+    
+    def toggle_auto_detect(self):
+        """Toggle automatic detection on live feed"""
+        self.auto_detect_enabled = self.auto_detect_var.get()
+        if self.auto_detect_enabled:
+            self.auto_detect_status.configure(text="● ON", text_color=self.colors["success"])
+            self.status_label.configure(text="Auto-detection enabled - Detecting every 2 seconds")
+        else:
+            self.auto_detect_status.configure(text="● OFF", text_color=self.colors["text_secondary"])
+            self.status_label.configure(text="Auto-detection disabled")
+        print(f"🔄 Auto-detection: {'ON' if self.auto_detect_enabled else 'OFF'}")
     
     def resume_camera_feed(self):
         """Resume camera feed after showing detection"""

@@ -27,9 +27,9 @@ fi
 echo "📦 Installing/upgrading PyInstaller..."
 pip install --upgrade pyinstaller
 
-# Build using the Raspberry Pi spec file
-echo "🔨 Building executable..."
-pyinstaller main_rpi.spec --clean
+            # Build using the spec file
+            echo "🔨 Building executable..."
+            pyinstaller build.spec --clean
 
 if [ $? -eq 0 ]; then
     echo "✅ Build successful!"
@@ -41,4 +41,5 @@ else
     echo "❌ Build failed!"
     exit 1
 fi
+
 
