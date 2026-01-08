@@ -16,12 +16,17 @@ from PIL import Image
 class RoboflowDetector:
     """Detector using Roboflow Inference API"""
     
-    def __init__(self):
+    def __init__(self, min_confidence=0.3, grouping_distance=250, grouping_horizontal_distance=500):
         self.use_http = False
         self.workspace_name = "cable-evfad"
         self.workflow_id = "find-white-stripes-yellow-stripes-blue-stripes-pink-stripes-and-green-stripes"
         self.api_key = "os34K4b17ImpAhsyrIiz"
         self.api_url = "https://serverless.roboflow.com"
+        
+        # Detection parameters (increased for better grouping)
+        self.min_confidence = min_confidence  # Minimum confidence threshold (0.0 to 1.0)
+        self.grouping_distance = grouping_distance  # Max vertical distance for grouping stripes (increased to 250)
+        self.grouping_horizontal_distance = grouping_horizontal_distance  # Max horizontal distance (increased to 500)
         
         # Always use direct HTTP requests to match website API format exactly
         try:
@@ -29,6 +34,7 @@ class RoboflowDetector:
             self.requests = requests
             self.use_http = True
             print("✅ Using direct HTTP requests to Roboflow API (matches website format)")
+            print(f"⚙️  Detection settings: min_confidence={min_confidence}, grouping_distance={grouping_distance}px")
         except ImportError:
             print("❌ requests library not available")
             self.use_http = False
@@ -356,9 +362,16 @@ class RoboflowDetector:
                 # Extract confidence
                 confidence = pred.get('confidence', pred.get('score', pred.get('probability', 0.8)))
                 if isinstance(confidence, (int, float)):
-                    confidence = float(confidence) * 100 if confidence <= 1.0 else float(confidence)
+                    confidence_raw = float(confidence) if confidence <= 1.0 else float(confidence) / 100.0
+                    confidence_percent = confidence_raw * 100
                 else:
-                    confidence = 80.0
+                    confidence_raw = 0.8
+                    confidence_percent = 80.0
+                
+                # Filter by minimum confidence
+                if confidence_raw < self.min_confidence:
+                    print(f"Skipping low confidence detection: {confidence_percent:.1f}% < {self.min_confidence * 100}%")
+                    continue
                 
                 markers.append({
                     "component_id": idx + 1,
@@ -371,7 +384,7 @@ class RoboflowDetector:
                         "width": w,
                         "height": h
                     },
-                    "confidence": round(float(confidence), 2),
+                    "confidence": round(float(confidence_percent), 2),
                     "center": (x + w // 2, y + h // 2),
                     "stripe_count": 3
                 })
@@ -392,17 +405,29 @@ class RoboflowDetector:
     def _group_stripes_into_markings(self, stripes: List[Dict]) -> List[Dict]:
         """
         Group stripes into markings: 3 stripes = 1 marking
-        Groups nearby stripes of the same color together
+        Uses clustering approach - any stripe close to ANY stripe in the group gets added
         """
         if not stripes:
             return []
         
-        # Group stripes by color and proximity
+        print(f"\n🔍 GROUPING {len(stripes)} stripes into markings...")
+        print(f"   Max vertical distance: {self.grouping_distance}px")
+        print(f"   Max horizontal distance: {self.grouping_horizontal_distance}px")
+        
+        # Group stripes by color and proximity using clustering
         grouped = []
         used_indices = set()
         
         # Sort stripes by Y position (top to bottom) then X (left to right)
         sorted_stripes = sorted(stripes, key=lambda s: (s["center"][1], s["center"][0]))
+        
+        # Print all stripes for debugging
+        print(f"\n   Raw stripes detected:")
+        for i, stripe in enumerate(sorted_stripes):
+            color = stripe.get("primary_color", "Unknown")
+            center = stripe["center"]
+            conf = stripe.get("confidence", 0)
+            print(f"   [{i}] {color} at ({center[0]}, {center[1]}) - {conf:.1f}%")
         
         for i, stripe in enumerate(sorted_stripes):
             if i in used_indices:
@@ -410,34 +435,55 @@ class RoboflowDetector:
             
             # Start a new group with this stripe
             group = [stripe]
+            group_indices = {i}
             used_indices.add(i)
             color = stripe.get("primary_color", "Unknown")
-            group_center_y = stripe["center"][1]
             
-            # Find nearby stripes of the same color
-            # Look for stripes within a reasonable distance (e.g., 200 pixels vertically)
-            max_distance = 200
+            print(f"\n   Starting new group with stripe [{i}] ({color})")
             
-            for j, other_stripe in enumerate(sorted_stripes[i+1:], start=i+1):
-                if j in used_indices:
-                    continue
+            # Keep looking for nearby stripes until no more can be added
+            # Use iterative expansion: check if any remaining stripe is close to ANY stripe in the group
+            added_new = True
+            iterations = 0
+            max_iterations = 20  # Prevent infinite loops
+            
+            while added_new and iterations < max_iterations:
+                added_new = False
+                iterations += 1
                 
-                other_color = other_stripe.get("primary_color", "Unknown")
-                other_center_y = other_stripe["center"][1]
-                
-                # Check if same color and within distance
-                if color == other_color and abs(other_center_y - group_center_y) < max_distance:
-                    group.append(other_stripe)
-                    used_indices.add(j)
+                for j, other_stripe in enumerate(sorted_stripes):
+                    if j in used_indices:
+                        continue
                     
-                    # Update group center Y to average
-                    group_center_y = sum(s["center"][1] for s in group) / len(group)
+                    other_color = other_stripe.get("primary_color", "Unknown")
                     
-                    # Stop when we have 3 stripes (1 marking)
-                    if len(group) >= 3:
-                        break
+                    # Must be same color
+                    if color.lower() != other_color.lower():
+                        continue
+                    
+                    other_center = other_stripe["center"]
+                    
+                    # Check if this stripe is close to ANY stripe already in the group
+                    is_close = False
+                    for group_stripe in group:
+                        group_center = group_stripe["center"]
+                        
+                        vertical_dist = abs(other_center[1] - group_center[1])
+                        horizontal_dist = abs(other_center[0] - group_center[0])
+                        
+                        if (vertical_dist < self.grouping_distance and 
+                            horizontal_dist < self.grouping_horizontal_distance):
+                            is_close = True
+                            print(f"      Found nearby stripe [{j}]: v_dist={vertical_dist}px, h_dist={horizontal_dist}px")
+                            break
+                    
+                    if is_close:
+                        group.append(other_stripe)
+                        group_indices.add(j)
+                        used_indices.add(j)
+                        added_new = True
             
-            # Create a marking from the group
+            # Create a marking from the group (regardless of stripe count)
             if group:
                 # Calculate combined bounding box
                 min_x = min(s["bounding_box"]["x"] for s in group)
@@ -463,17 +509,32 @@ class RoboflowDetector:
                     "confidence": round(avg_confidence, 2),
                     "center": ((min_x + max_x) // 2, (min_y + max_y) // 2),
                     "stripe_count": len(group),
-                    "stripes_in_group": len(group)  # Track how many stripes were grouped
+                    "stripes_in_group": len(group)
                 }
                 
                 grouped.append(marking)
+                print(f"   ✓ Created marking with {len(group)} stripe(s) from indices {sorted(group_indices)}")
         
         # Sort grouped markings by position
         grouped.sort(key=lambda m: (m["center"][1], m["center"][0]))
         for idx, marking in enumerate(grouped):
             marking["component_id"] = idx + 1
         
-        print(f"📊 Grouped {len(stripes)} stripes into {len(grouped)} markings (3 stripes = 1 marking)")
+        # Log grouping summary
+        single_stripe_count = sum(1 for m in grouped if m.get('stripes_in_group', 1) == 1)
+        two_stripe_count = sum(1 for m in grouped if m.get('stripes_in_group', 1) == 2)
+        three_plus_count = sum(1 for m in grouped if m.get('stripes_in_group', 1) >= 3)
+        
+        print(f"\n📊 GROUPING SUMMARY:")
+        print(f"   Input: {len(stripes)} raw stripes")
+        print(f"   Output: {len(grouped)} markings")
+        print(f"   - 1 stripe: {single_stripe_count} marking(s)")
+        print(f"   - 2 stripes: {two_stripe_count} marking(s)")
+        print(f"   - 3+ stripes: {three_plus_count} marking(s)")
+        
+        # Warning if we have groups with less than 3 stripes
+        if single_stripe_count > 0 or two_stripe_count > 0:
+            print(f"   ⚠️  Warning: Some markings have < 3 stripes. Consider adjusting grouping distances.")
         
         return grouped
     
