@@ -18,6 +18,9 @@ a = Analysis(
         'requests',
         'roboflow',
         'RPi.GPIO',  # Raspberry Pi GPIO support
+        'threading',
+        'platform',
+        'time',
     ],
     hookspath=[],
     hooksconfig={},

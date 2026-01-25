@@ -1,0 +1,227 @@
+═══════════════════════════════════════════════════════════════════════════════
+  CABLE MARKER DETECTION SYSTEM - RASPBERRY PI INSTALLATION & USAGE GUIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+📋 PREREQUISITES
+───────────────────────────────────────────────────────────────────────────────
+• Raspberry Pi 3 or newer (Raspberry Pi 4 recommended)
+• Raspberry Pi OS (Bullseye or newer)
+• USB Camera or Raspberry Pi Camera Module
+• Internet connection (for Roboflow API)
+• 4GB+ SD card with Raspberry Pi OS installed
+• Monitor, keyboard, and mouse
+• Optional: GPIO pins for hardware control
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📥 INSTALLATION
+───────────────────────────────────────────────────────────────────────────────
+
+1. Transfer Files to Raspberry Pi
+   ────────────────────────────────
+   • Copy the project folder to your Raspberry Pi:
+     scp -r infac-p3 pi@raspberrypi.local:~/
+   
+   • Or use a USB drive to transfer files
+
+2. Run Installation Script
+   ────────────────────────
+   cd ~/infac-p3
+   chmod +x install_rpi.sh
+   ./install_rpi.sh
+   
+   This will:
+   ✓ Update system packages
+   ✓ Install Python dependencies
+   ✓ Install OpenCV and camera drivers
+   ✓ Install RPi.GPIO library
+   ✓ Configure GPIO permissions
+   ✓ Enable camera support
+   
+   ⚠️ Installation may take 20-30 minutes on Raspberry Pi
+
+3. Logout and Login
+   ─────────────────
+   After installation, logout and login again for GPIO permissions to take effect:
+   
+   logout
+   
+   (Or reboot: sudo reboot)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🚀 RUNNING THE APPLICATION
+───────────────────────────────────────────────────────────────────────────────
+
+Standard Mode (No GPIO):
+   ./run_rpi.sh
+
+With GPIO Control:
+   sudo ./run_rpi.sh
+
+Manual Run:
+   source venv/bin/activate
+   python app.py
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🔧 GPIO PIN CONFIGURATION
+───────────────────────────────────────────────────────────────────────────────
+
+Physical Pins (BCM Mode):
+┌─────────────┬──────────────┬──────────────────────────────────┐
+│ GPIO Pin    │ Physical Pin │ Colors Detected                  │
+├─────────────┼──────────────┼──────────────────────────────────┤
+│ GPIO 18     │ Pin 12       │ Yellow, Green, Pink, Grey        │
+│ GPIO 23     │ Pin 16       │ Blue, Green, Red, Grey           │
+│ GPIO 24     │ Pin 18       │ White, Pink, Red, Grey           │
+│ GND         │ Pins 6,9,14  │ Ground (connect all devices)     │
+└─────────────┴──────────────┴──────────────────────────────────┘
+
+Pin Combinations by Color:
+• Yellow → GPIO 18 HIGH
+• Blue   → GPIO 23 HIGH
+• Green  → GPIO 18 + 23 HIGH
+• White  → GPIO 24 HIGH
+• Pink   → GPIO 18 + 24 HIGH
+• Red    → GPIO 23 + 24 HIGH
+• Grey   → GPIO 18 + 23 + 24 HIGH
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📷 CAMERA SETUP
+───────────────────────────────────────────────────────────────────────────────
+
+USB Camera:
+1. Plug in USB camera
+2. Run: ls /dev/video*
+3. You should see /dev/video0 (or similar)
+4. In the app, select "Camera 0" from dropdown
+
+Raspberry Pi Camera Module:
+1. Connect camera to CSI port
+2. Enable camera:
+   sudo raspi-config
+   → Interface Options → Camera → Enable
+3. Reboot: sudo reboot
+4. Test camera: raspistill -o test.jpg
+
+Troubleshooting Camera:
+• Check available cameras: v4l2-ctl --list-devices
+• Test with: ffplay /dev/video0
+• Adjust permissions: sudo usermod -a -G video $USER
+
+═══════════════════════════════════════════════════════════════════════════════
+
+⚙️ PERFORMANCE OPTIMIZATION
+───────────────────────────────────────────────────────────────────────────────
+
+For Better Performance:
+1. Use Raspberry Pi 4 (8GB recommended)
+2. Overclock (if using active cooling):
+   Edit /boot/config.txt:
+   arm_freq=2000
+   gpu_freq=750
+
+3. Use lite/headless mode for production
+4. Close unnecessary applications
+5. Use 720p camera resolution (1280x720)
+
+Current Optimizations:
+✓ Camera buffer size: 1 (low latency)
+✓ Frame resolution: 1280x720
+✓ Detection interval: 0.5s smart detection
+✓ Image compression before API call
+✓ Multithreaded detection
+✓ Scene locking (no redundant detection)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🐛 TROUBLESHOOTING
+───────────────────────────────────────────────────────────────────────────────
+
+GPIO Not Working:
+   sudo usermod -a -G gpio $USER
+   logout and login again
+   
+   Or run with sudo:
+   sudo ./run_rpi.sh
+
+Camera Not Detected:
+   ls /dev/video*
+   v4l2-ctl --list-devices
+   sudo apt-get install v4l-utils
+   sudo modprobe bcm2835-v4l2
+
+Performance Issues:
+   • Reduce camera resolution
+   • Close other applications
+   • Use Raspberry Pi OS Lite
+   • Check CPU temperature: vcgencmd measure_temp
+   • Ensure adequate power supply (5V 3A)
+
+Import Errors:
+   source venv/bin/activate
+   pip install -r requirements_rpi.txt
+
+Display Issues:
+   export DISPLAY=:0
+   xhost +local:
+
+Out of Memory:
+   • Increase swap size
+   • Use lighter detection model
+   • Close browser and other apps
+
+═══════════════════════════════════════════════════════════════════════════════
+
+🧪 TESTING
+───────────────────────────────────────────────────────────────────────────────
+
+Test GPIO (in Python):
+   from gpio_controller import GPIOController
+   gpio = GPIOController()
+   gpio.test_gpio()
+
+Or use the "Test GPIO" button in the application UI
+
+Check System Status:
+   • CPU temperature: vcgencmd measure_temp
+   • Memory usage: free -h
+   • Disk space: df -h
+   • Camera status: vcgencmd get_camera
+
+═══════════════════════════════════════════════════════════════════════════════
+
+📞 SUPPORT & UPDATES
+───────────────────────────────────────────────────────────────────────────────
+
+For issues or questions:
+• Check troubleshooting section above
+• Review installation logs
+• Test components individually (camera, GPIO, detection)
+
+Update Application:
+   git pull origin main
+   pip install -r requirements_rpi.txt
+
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ QUICK START CHECKLIST
+───────────────────────────────────────────────────────────────────────────────
+□ Raspberry Pi OS installed
+□ Internet connection working
+□ Camera connected and tested
+□ Ran install_rpi.sh script
+□ Logged out and back in
+□ Run ./run_rpi.sh
+□ Select camera from dropdown
+□ Click "Start Camera"
+□ Test GPIO (if using hardware control)
+□ Enable Auto-Detect
+□ Point camera at cable markers
+
+═══════════════════════════════════════════════════════════════════════════════
+
+
+

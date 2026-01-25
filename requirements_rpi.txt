@@ -13,12 +13,15 @@ customtkinter>=5.2.0
 requests>=2.23.0
 roboflow>=1.2.0
 
-# Raspberry Pi GPIO (install separately on Raspberry Pi)
-# RPi.GPIO>=0.7.0  # Install with: pip install RPi.GPIO
+# Raspberry Pi GPIO
+# Install system package first: sudo apt-get install python3-rpi.gpio
+# OR install via pip: pip install RPi.GPIO
+RPi.GPIO>=0.7.1
 
-# Optional: For better performance on Raspberry Pi
-# Consider installing these if needed:
-# - picamera2 (for Raspberry Pi camera module)
-# - v4l2-python3 (for USB cameras)
+# Optional: For better camera performance on Raspberry Pi
+# Uncomment if you want to use these:
+# picamera2  # For Raspberry Pi camera module (newer, recommended)
+# v4l2-python3  # For advanced USB camera control
+
 
 
