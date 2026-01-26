@@ -74,14 +74,21 @@ class CableMarkerApp:
         self.current_display = None
         self.image_path = None
         self.detected_markers = []
+        self.detected_markers = []
         self.all_detected_markers = []
+        
+        # ROI Variables
+        self.roi = None  # (x, y, w, h) or None
+        self.roi_selecting = False
+        self.roi_start_point = None
+        self.roi_current_point = None
         
         # Camera variables
         self.camera = None
         self.camera_active = False
         self.camera_index = 0
         self.capture_thread = None
-        self.show_detection_pause = False
+        # self.show_detection_pause = False  <-- Removed
         self.live_detected_markers = []
         
 
@@ -246,6 +253,41 @@ class CableMarkerApp:
             border_color=self.colors["border"]
         )
         self.color_filter_dropdown.pack(fill="x", pady=(0, 25))
+        
+        # --- Section: ROI ---
+        ctk.CTkLabel(
+            scroll,
+            text="DETECTION AREA",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=self.colors["primary"],
+            anchor="w"
+        ).pack(fill="x", pady=(0, 10))
+        
+        roi_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+        roi_frame.pack(fill="x", pady=(0, 25))
+        
+        self.select_roi_btn = ctk.CTkButton(
+            roi_frame,
+            text="⛝ Select Area",
+            command=self.toggle_roi_selection,
+            height=32,
+            fg_color=self.colors["surface"],
+            border_width=1,
+            border_color=self.colors["primary"]
+        )
+        self.select_roi_btn.pack(fill="x", pady=(0, 5))
+        
+        self.reset_roi_btn = ctk.CTkButton(
+            roi_frame,
+            text="↺ Reset Full View",
+            command=self.reset_roi,
+            height=32,
+            fg_color=self.colors["surface"],
+            border_width=1,
+            border_color=self.colors["border"],
+            state="disabled"
+        )
+        self.reset_roi_btn.pack(fill="x")
         
         # --- Section: Actions ---
         ctk.CTkLabel(
@@ -544,9 +586,20 @@ class CableMarkerApp:
             if self.image_label is None:
                 self.image_label = ctk.CTkLabel(self.canvas_frame, text="")
                 self.image_label.place(relx=0.5, rely=0.5, anchor="center")
+                # Bind mouse events for ROI selection
+                self.image_label.bind("<Button-1>", self.on_roi_start)
+                self.image_label.bind("<B1-Motion>", self.on_roi_drag)
+                self.image_label.bind("<ButtonRelease-1>", self.on_roi_end)
+                self.image_label.bind("<Enter>", lambda e: self.on_mouse_enter())
+                self.image_label.bind("<Leave>", lambda e: self.on_mouse_leave())
 
             self.image_label.configure(image=photo)
             self.image_label.image = photo
+            
+            # Store scaling info for coordinate mapping
+            self.display_scale = scale
+            self.display_offset_x = (canvas_width - new_width) // 2
+            self.display_offset_y = (canvas_height - new_height) // 2
             # print("DEBUG: Image updated on label")
             
         except Exception as e:
@@ -561,7 +614,38 @@ class CableMarkerApp:
         self.header_status.configure(text="● Detecting", text_color=self.colors["warning"])
         self.root.update()
         
-        self.all_detected_markers = self.detector.detect_markers(self.original_image)
+        # Handle ROI
+        detect_image = self.original_image
+        offset_x, offset_y = 0, 0
+        
+        if self.roi:
+            x, y, w, h = self.roi
+            # Ensure ROI is valid within image bounds
+            img_h, img_w = self.original_image.shape[:2]
+            x = max(0, min(x, img_w))
+            y = max(0, min(y, img_h))
+            w = min(w, img_w - x)
+            h = min(h, img_h - y)
+            
+            if w > 0 and h > 0:
+                detect_image = self.original_image[y:y+h, x:x+w]
+                offset_x, offset_y = x, y
+        
+        # Run detection
+        self.all_detected_markers = self.detector.detect_markers(detect_image)
+        
+        # Adjust coordinates if ROI was used
+        if offset_x > 0 or offset_y > 0:
+            for marker in self.all_detected_markers:
+                # Adjust bounding box if present
+                if 'bounding_box' in marker:
+                    marker['bounding_box']['x'] += offset_x
+                    marker['bounding_box']['y'] += offset_y
+                
+                # Adjust center tuple
+                if 'center' in marker:
+                    cx, cy = marker['center']
+                    marker['center'] = (cx + offset_x, cy + offset_y)
         
         self.apply_color_filter()
         
@@ -570,10 +654,17 @@ class CableMarkerApp:
             self.detected_markers
         )
         
+        # Draw ROI rectangle
+        if self.roi:
+            x, y, w, h = self.roi
+            cv2.rectangle(self.processed_image, (x, y), (x+w, y+h), (0, 255, 255), 2)
+            cv2.putText(self.processed_image, "ROI", (x, y-10), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        
         self.display_image(self.processed_image)
         self.update_results()
         
-        saved_path = self.auto_save_detection()
+        # saved_path = self.auto_save_detection() # Removed
         
         self.gpio_controller.process_detected_colors(self.detected_markers)
         
@@ -632,27 +723,10 @@ class CableMarkerApp:
             self.display_image(self.current_display)
             self.status_label.configure(text="Reset to original image")
             
-    def auto_save_detection(self):
-        """Auto-save detection image"""
-        if self.processed_image is None:
-            return None
-        
-        try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            marker_count = len(self.detected_markers)
-            
-            if hasattr(self, 'image_path') and self.image_path:
-                source_name = os.path.splitext(os.path.basename(self.image_path))[0]
-                source_name = "".join(c for c in source_name if c.isalnum() or c in ('-', '_'))[:30]
-                filename = f"{timestamp}_{source_name}_{marker_count}markers.jpg"
-            else:
-                filename = f"{timestamp}_detection_{marker_count}markers.jpg"
-            
-            file_path = os.path.join(self.detections_dir, filename)
-            cv2.imwrite(file_path, self.processed_image)
-            return file_path
-        except Exception as e:
-            return None
+    
+    # def auto_save_detection(self): <-- Removed method
+    #    ...
+
     
     def save_results(self):
         """Save annotated image"""
@@ -801,8 +875,35 @@ class CableMarkerApp:
                                 try:
                                     self.is_inferencing = True
                                     
+                                    # Prepare input frame (crop if ROI set)
+                                    detect_frame = input_frame
+                                    offset_x, offset_y = 0, 0
+                                    
+                                    if self.roi:
+                                        x, y, w, h = self.roi
+                                        img_h, img_w = input_frame.shape[:2]
+                                        x = max(0, min(x, img_w))
+                                        y = max(0, min(y, img_h))
+                                        w = min(w, img_w - x)
+                                        h = min(h, img_h - y)
+                                        
+                                        if w > 0 and h > 0:
+                                            detect_frame = input_frame[y:y+h, x:x+w]
+                                            offset_x, offset_y = x, y
+                                    
                                     # Run inference (network bound)
-                                    detections = self.detector.detect_single_frame(input_frame)
+                                    detections = self.detector.detect_single_frame(detect_frame)
+                                    
+                                    # Adjust coordinates if ROI used
+                                    if offset_x > 0 or offset_y > 0 and detections:
+                                        for marker in detections:
+                                            if 'bounding_box' in marker:
+                                                marker['bounding_box']['x'] += offset_x
+                                                marker['bounding_box']['y'] += offset_y
+                                            
+                                            if 'center' in marker:
+                                                cx, cy = marker['center']
+                                                marker['center'] = (cx + offset_x, cy + offset_y)
                                     
                                     # Group stripes
                                     if detections:
@@ -834,11 +935,20 @@ class CableMarkerApp:
                         filtered_detections = self.detected_markers.copy()
                         
                         # Draw results overlay
+                        # Draw results overlay
                         if filtered_detections:
                             display_frame = self.detector.draw_detections(frame, filtered_detections)
-                            self.processed_image = display_frame.copy()
+                            self.processed_image = display_frame # Keep reference
                         else:
                             display_frame = frame.copy()
+                            self.processed_image = display_frame
+                            
+                        # Draw ROI rectangle on live feed
+                        if self.roi:
+                            x, y, w, h = self.roi
+                            cv2.rectangle(display_frame, (x, y), (x+w, y+h), (0, 255, 255), 2)
+                            cv2.putText(display_frame, "ROI ACTIVE", (x, y-10), 
+                                      cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
                         
                         # Update UI (thread-safe calls)
                         def update_ui_components():
@@ -922,10 +1032,37 @@ class CableMarkerApp:
                     # Simulate frame (copy original)
                     frame = self.original_image.copy()
                     
-                    # Run static detection
-                    self.all_detected_markers = self.detector.detect_markers(frame)
+                    # Prepare input frame (crop if ROI set)
+                    detect_frame = frame
+                    offset_x, offset_y = 0, 0
                     
-                    # Update UI in main thread
+                    if self.roi:
+                        x, y, w, h = self.roi
+                        img_h, img_w = frame.shape[:2]
+                        x = max(0, min(x, img_w))
+                        y = max(0, min(y, img_h))
+                        w = min(w, img_w - x)
+                        h = min(h, img_h - y)
+                        
+                        if w > 0 and h > 0:
+                            detect_frame = frame[y:y+h, x:x+w]
+                            offset_x, offset_y = x, y
+                    
+                    # Run static detection
+                    self.all_detected_markers = self.detector.detect_markers(detect_frame)
+                    
+                    # Adjust coordinates if ROI used
+                    if offset_x > 0 or offset_y > 0 and self.all_detected_markers:
+                        for marker in self.all_detected_markers:
+                            if 'bounding_box' in marker:
+                                marker['bounding_box']['x'] += offset_x
+                                marker['bounding_box']['y'] += offset_y
+                            
+                            if 'center' in marker:
+                                cx, cy = marker['center']
+                                marker['center'] = (cx + offset_x, cy + offset_y)
+                    
+                        # Update UI in main thread
                     def update_ui():
                         self.apply_color_filter()
                         
@@ -934,6 +1071,12 @@ class CableMarkerApp:
                             frame, 
                             self.detected_markers
                         )
+                        
+                        # Draw ROI rectangle
+                        if self.roi:
+                            x, y, w, h = self.roi
+                            cv2.rectangle(self.processed_image, (x, y), (x+w, y+h), (0, 255, 255), 2)
+                        
                         self.display_image(self.processed_image)
                         self.update_results()
                         self.gpio_controller.process_detected_colors(self.detected_markers)
@@ -960,7 +1103,7 @@ class CableMarkerApp:
         print("Stopping camera/simulation...")
         self.camera_active = False
         self.simulation_running = False
-        self.show_detection_pause = False
+        # self.show_detection_pause = False <-- Removed
 
         # Stop WebRTC stream (legacy cleanup if needed)
         # self.detector.stop_webrtc_stream()
@@ -985,11 +1128,10 @@ class CableMarkerApp:
     
 
     
-    def resume_camera_feed(self):
-        """Resume camera feed"""
-        if self.camera_active:
-            self.show_detection_pause = False
-            self.status_label.configure(text="Camera feed resumed")
+    
+    # def resume_camera_feed(self): <-- Removed
+    #    ...
+
     
     def test_gpio(self):
         """Test GPIO functionality"""
@@ -1035,6 +1177,130 @@ class CableMarkerApp:
         
         self.root.protocol("WM_DELETE_WINDOW", on_closing)
         self.root.mainloop()
+
+    # --- ROI Selection Methods ---
+    
+    def toggle_roi_selection(self):
+        """Toggle ROI selection mode"""
+        self.roi_selecting = not self.roi_selecting
+        
+        if self.roi_selecting:
+            self.select_roi_btn.configure(
+                text="Click & Drag to Select", 
+                fg_color=self.colors["primary"],
+                state="disabled" # Keep it active/pressed look or use state
+            )
+            # Change cursor if possible, or just rely on text
+            if self.image_label:
+                self.image_label.configure(cursor="crosshair")
+        else:
+            self.select_roi_btn.configure(
+                text="⛝ Select Area", 
+                fg_color=self.colors["surface"],
+                state="normal"
+            )
+            if self.image_label:
+                self.image_label.configure(cursor="")
+
+    def reset_roi(self):
+        """Reset ROI to full image"""
+        self.roi = None
+        self.reset_roi_btn.configure(state="disabled")
+        self.status_label.configure(text="ROI cleared - Detecting full frame")
+        
+        # Trigger re-detection/update
+        if not self.camera_active and self.original_image is not None:
+             self.detect_markers()
+        else:
+             # Camera loop picks up None roi automatically
+             pass
+
+    def on_mouse_enter(self):
+        if self.roi_selecting:
+            self.image_label.configure(cursor="crosshair")
+
+    def on_mouse_leave(self):
+        self.image_label.configure(cursor="")
+
+    def on_roi_start(self, event):
+        """Start ROI selection"""
+        if not self.roi_selecting:
+            return
+            
+        self.roi_start_point = (event.x, event.y)
+        self.roi_current_point = (event.x, event.y)
+
+    def on_roi_drag(self, event):
+        """Update ROI selection visualization"""
+        if not self.roi_selecting or not self.roi_start_point:
+            return
+            
+        self.roi_current_point = (event.x, event.y)
+        
+        # Visual feedback (draw rectangle on current display copy)
+        if self.current_display is not None:
+            # We can't easily draw on the PhotoImage directly efficiently here without canvas logic
+            # or converting back and forth. 
+            # Ideally, we'd use a Canvas widget instead of Label for better drawing.
+            # But for now, let's just use the final selection.
+            # OR prevent complex drawing during drag for simplicity in Tkinter Label.
+            pass
+
+    def on_roi_end(self, event):
+        """Finalize ROI selection"""
+        if not self.roi_selecting or not self.roi_start_point:
+            return
+            
+        end_point = (event.x, event.y)
+        start_point = self.roi_start_point
+        
+        # Calculate coordinates in ORIGINAL image space
+        # event.x/y are relative to the label image (which is resized)
+        
+        if not hasattr(self, 'display_scale') or self.display_scale == 0:
+            return
+            
+        # Get bounds
+        x1 = min(start_point[0], end_point[0])
+        y1 = min(start_point[1], end_point[1])
+        x2 = max(start_point[0], end_point[0])
+        y2 = max(start_point[1], end_point[1])
+        
+        # Minimum size check (e.g., 10px)
+        if (x2 - x1) < 10 or (y2 - y1) < 10:
+            self.roi_selecting = False
+            self.toggle_roi_selection() # Reset button
+            return
+
+        # Map to original image coordinates
+        scale = self.display_scale
+        orig_x = int(x1 / scale)
+        orig_y = int(y1 / scale)
+        orig_w = int((x2 - x1) / scale)
+        orig_h = int((y2 - y1) / scale)
+        
+        # Bounds check
+        if self.original_image is not None:
+            h, w = self.original_image.shape[:2]
+            orig_x = max(0, min(orig_x, w))
+            orig_y = max(0, min(orig_y, h))
+            orig_w = min(orig_w, w - orig_x)
+            orig_h = min(orig_h, h - orig_y)
+            
+            self.roi = (orig_x, orig_y, orig_w, orig_h)
+            
+            print(f"ROI Selected: {self.roi}")
+            self.status_label.configure(text=f"ROI Active: {orig_w}x{orig_h}")
+            self.reset_roi_btn.configure(state="normal")
+            
+            # Reset selection mode
+            self.roi_selecting = False
+            self.toggle_roi_selection() # Reset UI state
+            
+            # Trigger update
+            if not self.camera_active:
+                self.detect_markers()
+            # If camera active, next frame will use ROI
 
 
 if __name__ == "__main__":
