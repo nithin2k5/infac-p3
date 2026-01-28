@@ -56,7 +56,7 @@ class CableMarkerApp:
         
         # Initialize detector
         self.detector = RoboflowDetector(
-            min_confidence=0.25,
+            min_confidence=0.60,
             grouping_distance=250,
             grouping_horizontal_distance=500
         )

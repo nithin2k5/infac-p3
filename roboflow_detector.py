@@ -2,7 +2,7 @@
 Roboflow Cable Marker Detector
 
 Features:
-- Static image detection via Roboflow model (infacp3/v2)
+- Static image detection via Roboflow model (infacp3/v9)
 - Batch video processing via Roboflow Python SDK
 
 Usage:
@@ -25,7 +25,7 @@ import os
 
 class RoboflowDetector:
     """
-    Cable marker detector using Roboflow model (infacp3/v2)
+    Cable marker detector using Roboflow model (infacp3/v9)
 
     Capabilities:
     - Static image detection via Roboflow Python SDK (detect_markers method)
@@ -34,7 +34,7 @@ class RoboflowDetector:
     Uses direct model inference for consistent results with Roboflow website.
     """
     
-    def __init__(self, min_confidence=0.25, grouping_distance=250, grouping_horizontal_distance=500):
+    def __init__(self, min_confidence=0.60, grouping_distance=250, grouping_horizontal_distance=500, max_area_ratio=0.5):
         self.client = None
         self.workspace_name = "cable-evfad"
         # self.workflow_id = "small-object-detection-sahi" # Removed legacy workflow
@@ -46,12 +46,13 @@ class RoboflowDetector:
         self.project = None
         self.model = None
         self.roboflow_project_name = "infacp3"  # Project name from Roboflow workspace
-        self.roboflow_model_version = "2"  # Model version
+        self.roboflow_model_version = "9"  # Model version
         
         # Detection parameters
         self.min_confidence = min_confidence
         self.grouping_distance = grouping_distance
         self.grouping_horizontal_distance = grouping_horizontal_distance
+        self.max_area_ratio = max_area_ratio
         
         # WebRTC session
         self.session = None
@@ -530,8 +531,34 @@ class RoboflowDetector:
                 # Log what we found
                 print(f"      - Stream Found '{color_raw}' with {confidence_percent:.1f}% confidence")
                 
-                # Note: Local filtering and 'cable' skipping removed as requested
-                # confidence_raw < self.min_confidence check removed
+                if confidence_raw < self.min_confidence:
+                    continue
+                
+                # Filter by size (ignore logically impossible large detections)
+                # WebRTC usually returns normalized width/height (0-1) or pixel values?
+                # Using w/video_width if available, but here w/h seem to be in pixels based on earlier parsing
+                # Actually earlier log shows w/h are likely pixels.
+                
+                # Check for large detections (likely false positives)
+                # We need image dimensions. Metadata might help but usually not easy to get here.
+                # However, for WebRTC, we don't have explicit frame dims in this method easily unless we store them.
+                # But wait, earlier in this file: "w = float(pred.get('width', pred.get('w', 0)))"
+                
+                # For now, let's skip size check in stream if we can't reliably get frame size
+                # OR we can pass frame size if available.
+                # Actually, let's look at how _parse_roboflow_predictions is called.
+                # _parse_stream_data is called from on_data
+                
+                # Let's verify if 'width' and 'height' are in pixels or normalized. 
+                # Roboflow usually returns pixels.
+                # If we don't have frame size matching the detection space, we can't calculate ratio.
+                
+                # SKIPPING size check for stream for now to avoid errors, 
+                # focusing on confidence which is the main fix.
+                # User complaint showed large blue box.
+                # Let's rely on confidence for now for stream, or implement robust way.
+                
+                pass
                 
                 
                 detections.append({
@@ -598,6 +625,11 @@ class RoboflowDetector:
                 # Extract confidence
                 confidence = pred_dict.get('confidence', 0.8)
                 confidence_raw = float(confidence) if confidence <= 1.0 else float(confidence) / 100.0
+                
+                # Filter by confidence
+                if confidence_raw < self.min_confidence:
+                    continue
+
                 confidence_percent = confidence_raw * 100
                 
                 # Extract bounding box (Roboflow format: x, y are centers, width, height)
@@ -606,6 +638,12 @@ class RoboflowDetector:
                 w = float(pred_dict.get('width', 0))
                 h = float(pred_dict.get('height', 0))
                 
+                # Filter by size (ignore logically impossible large detections)
+                area_ratio = (w * h) / (image_width * image_height)
+                if area_ratio > self.max_area_ratio:
+                    print(f"      - Ignored large detection: {color_raw} ({area_ratio:.1%} of screen)")
+                    continue
+
                 if w <= 0 or h <= 0:
                     continue
                 
