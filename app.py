@@ -56,7 +56,7 @@ class CableMarkerApp:
         
         # Initialize detector
         self.detector = RoboflowDetector(
-            min_confidence=0.60,
+            min_confidence=0.50,
             grouping_distance=250,
             grouping_horizontal_distance=500
         )
@@ -113,50 +113,41 @@ class CableMarkerApp:
         self.create_sidebar()        # Left: Controls
         self.create_main_display()   # Center: Video
         self.create_right_panel()    # Right: Insights
-        self.create_footer()
+        # self.create_footer()       # Removed footer for cleaner look, status moved to sidebar/header
+
         
     def create_header(self):
-        """Create simple header"""
-        header = ctk.CTkFrame(self.root, height=70, fg_color=self.colors["surface"], corner_radius=0)
+        """Create simple, professional header"""
+        header = ctk.CTkFrame(self.root, height=60, fg_color=self.colors["bg"], corner_radius=0)
         header.grid(row=0, column=0, columnspan=3, sticky="ew")
         header.grid_propagate(False)
         
-        # Title with icon
+        # Border bottom
+        ctk.CTkFrame(header, height=1, fg_color=self.colors["border"]).pack(side="bottom", fill="x")
+        
+        # Title Area
         title_frame = ctk.CTkFrame(header, fg_color="transparent")
-        title_frame.pack(side="left", padx=30)
+        title_frame.pack(side="left", padx=20)
         
-        title_icon = ctk.CTkLabel(
+        ctk.CTkLabel(
             title_frame,
-            text="⚡",
-            font=ctk.CTkFont(size=24),
-            text_color=self.colors["primary"]
-        )
-        title_icon.pack(side="left", padx=(0, 10))
-        
-        title = ctk.CTkLabel(
-            title_frame,
-            text="Cable Marker AI",
-            font=ctk.CTkFont(size=22, weight="bold"),
+            text="⚡ Cable Marker AI",
+            font=ctk.CTkFont(size=18, weight="bold"),
             text_color=self.colors["text"]
-        )
-        title.pack(side="left")
+        ).pack(side="left")
         
-        subtitle = ctk.CTkLabel(
-            title_frame,
-            text="| Professional Detection System",
-            font=ctk.CTkFont(size=14),
-            text_color=self.colors["text_secondary"]
-        )
-        subtitle.pack(side="left", padx=(10, 0), pady=(4, 0))
-        
-        # Status
-        self.header_status = ctk.CTkLabel(
+        # Status Badge
+        self.header_status = ctk.CTkButton(
             header,
             text="● System Ready",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=self.colors["success"]
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color=self.colors["surface"],
+            text_color=self.colors["success"],
+            hover=False,
+            height=28,
+            corner_radius=14
         )
-        self.header_status.pack(side="right", padx=40)
+        self.header_status.pack(side="right", padx=20)
         
     def create_sidebar(self):
         """Create controls sidebar (Left Panel)"""
@@ -172,74 +163,60 @@ class CableMarkerApp:
         # Scrollable content
         scroll = ctk.CTkScrollableFrame(
             sidebar,
-            fg_color="transparent"
+            fg_color="transparent",
+            width=260
         )
-        scroll.pack(fill="both", expand=True, padx=20, pady=20)
+        scroll.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # --- Section: Input Source ---
-        ctk.CTkLabel(
-            scroll,
-            text="INPUT SOURCE",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=self.colors["primary"],
-            anchor="w"
-        ).pack(fill="x", pady=(0, 10))
+        # Helper for Section Headers
+        def add_section(text):
+            f = ctk.CTkFrame(scroll, fg_color="transparent", height=30)
+            f.pack(fill="x", pady=(10, 5))
+            ctk.CTkLabel(
+                f, text=text, 
+                font=ctk.CTkFont(size=11, weight="bold"), 
+                text_color=self.colors["primary"],
+                anchor="w"
+            ).pack(fill="x")
+
+        # --- Input Source ---
+        add_section("INPUT SOURCE")
         
-        self.camera_var = ctk.StringVar(value="Select Camera Device")
+        self.camera_var = ctk.StringVar(value="Select Camera")
         self.camera_dropdown = ctk.CTkComboBox(
             scroll,
             values=self.get_available_cameras(),
             variable=self.camera_var,
             command=self.on_camera_selected,
-            height=40,
+            height=32,
             fg_color=self.colors["bg"],
-            button_color=self.colors["primary"],
+            dropdown_fg_color=self.colors["surface"],
             border_color=self.colors["border"]
         )
-        self.camera_dropdown.pack(fill="x", pady=(0, 10))
+        self.camera_dropdown.pack(fill="x", pady=(0, 8))
         
         self.camera_start_btn = ctk.CTkButton(
-            scroll,
-            text="▶ START STREAM",
-            command=self.start_camera,
-            height=40,
-            fg_color=self.colors["success"],
-            hover_color="#059669",
-            font=ctk.CTkFont(weight="bold"),
+            scroll, text="▶ Start Stream", command=self.start_camera,
+            height=32, fg_color=self.colors["success"], hover_color="#059669",
             state="disabled"
         )
-        self.camera_start_btn.pack(fill="x", pady=(0, 10))
+        self.camera_start_btn.pack(fill="x", pady=(0, 8))
         
         self.camera_stop_btn = ctk.CTkButton(
-            scroll,
-            text="⏹ STOP",
-            command=self.stop_camera,
-            height=40,
-            fg_color=self.colors["error"],
-            hover_color="#b91c1c",
-            font=ctk.CTkFont(weight="bold"),
+            scroll, text="⏹ Stop Stream", command=self.stop_camera,
+            height=32, fg_color=self.colors["error"], hover_color="#b91c1c",
             state="disabled"
         )
-        self.camera_stop_btn.pack(fill="x", pady=(0, 20))
+        self.camera_stop_btn.pack(fill="x", pady=(0, 8))
         
         ctk.CTkButton(
-            scroll,
-            text="📁 Load Image File",
-            command=self.load_image,
-            height=40,
-            fg_color=self.colors["border"],
-            hover_color=self.colors["primary"],
-            text_color=self.colors["text"],
-        ).pack(fill="x", pady=(0, 25))
+            scroll, text="📂 Load Image", command=self.load_image,
+            height=32, fg_color=self.colors["bg"], hover_color=self.colors["primary"],
+            border_width=1, border_color=self.colors["border"]
+        ).pack(fill="x", pady=(0, 5))
         
-        # --- Section: Filters ---
-        ctk.CTkLabel(
-            scroll,
-            text="FILTERS",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=self.colors["primary"],
-            anchor="w"
-        ).pack(fill="x", pady=(0, 10))
+        # --- Filters ---
+        add_section("FILTERS")
         
         self.color_filter_var = ctk.StringVar(value="All Colors")
         self.color_filter_dropdown = ctk.CTkComboBox(
@@ -247,101 +224,61 @@ class CableMarkerApp:
             values=["All Colors", "White", "Yellow", "Blue", "Pink", "Green"],
             variable=self.color_filter_var,
             command=self.on_color_filter_changed,
-            height=36,
+            height=32,
             fg_color=self.colors["bg"],
-            button_color=self.colors["primary"],
+            dropdown_fg_color=self.colors["surface"],
             border_color=self.colors["border"]
         )
-        self.color_filter_dropdown.pack(fill="x", pady=(0, 25))
+        self.color_filter_dropdown.pack(fill="x", pady=(0, 5))
         
-        # --- Section: ROI ---
-        ctk.CTkLabel(
-            scroll,
-            text="DETECTION AREA",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=self.colors["primary"],
-            anchor="w"
-        ).pack(fill="x", pady=(0, 10))
+        # --- ROI ---
+        add_section("REGION OF INTEREST")
         
-        roi_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        roi_frame.pack(fill="x", pady=(0, 25))
+        roi_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        roi_row.pack(fill="x", pady=(0, 5))
         
         self.select_roi_btn = ctk.CTkButton(
-            roi_frame,
-            text="⛝ Select Area",
-            command=self.toggle_roi_selection,
-            height=32,
-            fg_color=self.colors["surface"],
-            border_width=1,
-            border_color=self.colors["primary"]
+            roi_row, text="Select Area", command=self.toggle_roi_selection,
+            height=28, fg_color=self.colors["bg"], border_width=1, 
+            border_color=self.colors["border"], width=110
         )
-        self.select_roi_btn.pack(fill="x", pady=(0, 5))
+        self.select_roi_btn.pack(side="left", padx=(0, 5))
         
         self.reset_roi_btn = ctk.CTkButton(
-            roi_frame,
-            text="↺ Reset Full View",
-            command=self.reset_roi,
-            height=32,
-            fg_color=self.colors["surface"],
-            border_width=1,
-            border_color=self.colors["border"],
-            state="disabled"
+            roi_row, text="Reset", command=self.reset_roi,
+            height=28, fg_color=self.colors["bg"], border_width=1, 
+            border_color=self.colors["border"], width=110, state="disabled"
         )
-        self.reset_roi_btn.pack(fill="x")
+        self.reset_roi_btn.pack(side="right")
         
-        # --- Section: Actions ---
-        ctk.CTkLabel(
-            scroll,
-            text="ACTIONS",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=self.colors["primary"],
-            anchor="w"
-        ).pack(fill="x", pady=(0, 10))
+        # --- Actions ---
+        add_section("ACTIONS")
         
         self.reset_btn = ctk.CTkButton(
-            scroll,
-            text="🔄 Reset View",
-            command=self.reset_view,
-            height=36,
-            fg_color=self.colors["border"],
-            hover_color=self.colors["primary"],
-            state="disabled"
+            scroll, text="Reset View", command=self.reset_view,
+            height=32, fg_color=self.colors["bg"], border_width=1, 
+            border_color=self.colors["border"], state="disabled"
         )
-        self.reset_btn.pack(fill="x", pady=(0, 25))
+        self.reset_btn.pack(fill="x", pady=(0, 5))
         
-        # --- Section: GPIO ---
+        # --- GPIO ---
         if IS_RASPBERRY_PI or self.gpio_controller.gpio_available:
-            ctk.CTkLabel(
-                scroll,
-                text="HARDWARE",
-                font=ctk.CTkFont(size=12, weight="bold"),
-                text_color=self.colors["primary"],
-                anchor="w"
-            ).pack(fill="x", pady=(0, 10))
+            add_section("HARDWARE CONTROL")
             
-            # GPIO Status
             gpio_status = self.gpio_controller.get_status()
-            status_text = "✅ Active" if gpio_status["initialized"] else "Simulation"
-            status_color = self.colors["success"] if gpio_status["initialized"] else self.colors["warning"]
+            status_text = "ready" if gpio_status["initialized"] else "simulated"
             
             self.gpio_status_label = ctk.CTkLabel(
-                scroll,
-                text=f"GPIO: {status_text}",
-                font=ctk.CTkFont(size=12),
-                text_color=status_color,
-                anchor="w"
+                scroll, text=f"Status: {status_text}",
+                font=ctk.CTkFont(size=11), text_color=self.colors["text_secondary"], anchor="w"
             )
-            self.gpio_status_label.pack(fill="x", pady=(0, 10))
+            self.gpio_status_label.pack(fill="x", pady=(0, 5))
             
             self.gpio_test_btn = ctk.CTkButton(
-                scroll,
-                text="Test Signals",
-                command=self.test_gpio,
-                height=32,
-                fg_color="#6366f1",
-                hover_color="#4f46e5"
+                scroll, text="Test Output Signals", command=self.test_gpio,
+                height=32, fg_color=self.colors["primary"], hover_color=self.colors["primary_hover"]
             )
-            self.gpio_test_btn.pack(fill="x", pady=(0, 15))
+            self.gpio_test_btn.pack(fill="x", pady=(0, 5))
         
     def create_main_display(self):
         """Create enhanced main image display area"""
@@ -394,7 +331,7 @@ class CableMarkerApp:
         self.image_label = None
         
     def create_right_panel(self):
-        """Create Right Insights Panel"""
+        """Create Right Insights Panel with Modern Cards"""
         right_panel = ctk.CTkFrame(
             self.root,
             width=320,
@@ -404,112 +341,75 @@ class CableMarkerApp:
         right_panel.grid(row=1, column=2, sticky="nsew", padx=0, pady=0)
         right_panel.grid_propagate(False)
         
-        # Scrollable content
-        scroll = ctk.CTkScrollableFrame(
-            right_panel,
-            fg_color="transparent"
-        )
-        scroll.pack(fill="both", expand=True, padx=20, pady=20)
+        # Title
+        title_frame = ctk.CTkFrame(right_panel, fg_color="transparent", height=50)
+        title_frame.pack(fill="x", padx=20, pady=(20, 10))
         
-        # --- Total Count Card ---
         ctk.CTkLabel(
-            scroll,
-            text="TOTAL DETECTED",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            title_frame,
+            text="LIVE INSIGHTS",
+            font=ctk.CTkFont(size=13, weight="bold"),
             text_color=self.colors["text_secondary"],
             anchor="w"
-        ).pack(fill="x", pady=(0, 10))
-        
-        count_card = ctk.CTkFrame(scroll, fg_color=self.colors["bg"], corner_radius=12)
-        count_card.pack(fill="x", pady=(0, 25))
+        ).pack(side="left")
+
+        # Total Count Big Number
+        stats_frame = ctk.CTkFrame(right_panel, fg_color=self.colors["bg"], corner_radius=10)
+        stats_frame.pack(fill="x", padx=20, pady=(0, 20))
         
         self.markers_count = ctk.CTkLabel(
-            count_card,
+            stats_frame,
             text="0",
-            font=ctk.CTkFont(size=64, weight="bold"),
+            font=ctk.CTkFont(size=42, weight="bold"),
             text_color=self.colors["primary"]
         )
-        self.markers_count.pack(pady=(20, 5))
+        self.markers_count.pack(pady=(15, 0))
         
         ctk.CTkLabel(
-            count_card,
-            text="Markers Visible",
-            font=ctk.CTkFont(size=14),
+            stats_frame,
+            text="Markers Detected",
+            font=ctk.CTkFont(size=12),
             text_color=self.colors["text_secondary"]
-        ).pack(pady=(0, 20))
+        ).pack(pady=(0, 15))
 
-        # --- Detection Log ---
+        # Divider
+        ctk.CTkFrame(right_panel, height=1, fg_color=self.colors["border"]).pack(fill="x", padx=20, pady=(0, 20))
+
+        # Scrollable "Cards" List
         ctk.CTkLabel(
-            scroll,
-            text="LIVE FEED",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            right_panel,
+            text="RECENT DETECTIONS",
+            font=ctk.CTkFont(size=11, weight="bold"),
             text_color=self.colors["text_secondary"],
             anchor="w"
-        ).pack(fill="x", pady=(0, 10))
-        
-        self.results_text = ctk.CTkTextbox(
-            scroll,
-            height=300,
-            font=ctk.CTkFont(family="Courier", size=11),
-            fg_color=self.colors["bg"],
-            text_color=self.colors["text"],
-            border_width=1,
-            border_color=self.colors["border"],
-            corner_radius=8
+        ).pack(fill="x", padx=20, pady=(0, 10))
+
+        self.results_scroll = ctk.CTkScrollableFrame(
+            right_panel,
+            fg_color="transparent",
+            height=400 # approximate
         )
-        self.results_text.pack(fill="x", pady=(0, 20))
+        self.results_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 20))
         
-        # --- Export Options ---
-        ctk.CTkLabel(
-            scroll,
-            text="EXPORT",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=self.colors["text_secondary"],
-            anchor="w"
-        ).pack(fill="x", pady=(0, 10))
-        
+        # Export Button at Bottom
         self.save_btn = ctk.CTkButton(
-            scroll,
-            text="💾 Save Analysis",
+            right_panel,
+            text="⬇ Export Data",
             command=self.save_results,
             height=40,
-            fg_color=self.colors["primary"],
-            hover_color=self.colors["primary_hover"],
+            fg_color="transparent",
+            border_width=1,
+            border_color=self.colors["primary"],
+            text_color=self.colors["primary"],
+            hover_color=self.colors["bg"],
             font=ctk.CTkFont(weight="bold"),
-            state="disabled"
+            state="disabled",
+            anchor="center"
         )
-        self.save_btn.pack(fill="x", pady=(0, 10))
+        self.save_btn.pack(fill="x", padx=20, pady=20, side="bottom")
 
-    def create_footer(self):
-        """Create simple footer"""
-        footer = ctk.CTkFrame(
-            self.root, 
-            height=35,
-            fg_color=self.colors["bg"],
-            corner_radius=0
-        )
-        footer.grid(row=2, column=0, columnspan=3, sticky="ew")
-        footer.grid_propagate(False)
-        
-        # Border top
-        border = ctk.CTkFrame(footer, height=1, fg_color=self.colors["border"])
-        border.pack(fill="x", side="top")
-        
-        self.status_label = ctk.CTkLabel(
-            footer,
-            text="Ready",
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors["text_secondary"]
-        )
-        self.status_label.pack(side="left", padx=20)
-        
-        version = ctk.CTkLabel(
-            footer,
-            text="v2.1",
-            font=ctk.CTkFont(size=10),
-            text_color=self.colors["text_secondary"]
-        )
-        version.pack(side="right", padx=20)
+    # Footer removed
+
         
     def load_image(self):
         """Load image from file"""
@@ -541,8 +441,8 @@ class CableMarkerApp:
             self.color_filter_var.set("All")
             self.selected_color_filter = "All"
             
-            self.status_label.configure(text=f"Loading: {os.path.basename(file_path)}")
-            self.header_status.configure(text="● Processing", text_color=self.colors["warning"])
+            self.header_status.configure(text=f"● Loading: {os.path.basename(file_path)}", text_color=self.colors["warning"])
+
             self.root.update()
             
             self.detect_markers()
@@ -610,8 +510,7 @@ class CableMarkerApp:
         if self.original_image is None:
             return
         
-        self.status_label.configure(text="Detecting markers...")
-        self.header_status.configure(text="● Detecting", text_color=self.colors["warning"])
+        self.header_status.configure(text="● Detecting...", text_color=self.colors["warning"])
         self.root.update()
         
         # Handle ROI
@@ -671,8 +570,8 @@ class CableMarkerApp:
         self.save_btn.configure(state="normal")
         
         marker_count = len(self.detected_markers)
-        self.status_label.configure(text=f"Found {marker_count} marker(s)")
-        self.header_status.configure(text="● Complete", text_color=self.colors["success"])
+        marker_count = len(self.detected_markers)
+        self.header_status.configure(text=f"● Found {marker_count} Marker(s)", text_color=self.colors["success"])
     
     def apply_color_filter(self):
         """Show all markers (no filtering - removed local logic)"""
@@ -684,44 +583,93 @@ class CableMarkerApp:
             marker["component_id"] = idx
         
     def update_results(self):
-        """Update results display"""
-        self.results_text.delete("1.0", "end")
-        
+        """Update results display with cards"""
+        # Clear existing cards
+        for widget in self.results_scroll.winfo_children():
+            widget.destroy()
+            
         if not self.detected_markers:
-            self.results_text.insert("1.0", "No markers detected.")
+            # Show empty state
+            ctk.CTkLabel(
+                self.results_scroll,
+                text="No markers detected\nWaiting for input...",
+                font=ctk.CTkFont(size=12, slant="italic"),
+                text_color=self.colors["text_secondary"]
+            ).pack(pady=40)
             self.markers_count.configure(text="0")
             return
-        
+            
         self.markers_count.configure(text=f"{len(self.detected_markers)}")
         
-        results_text = "DETECTION RESULTS\n"
-        results_text += "=" * 35 + "\n\n"
-        
-        for marker in self.detected_markers:
-            cable_id = marker['component_id']
+        # Create cards for each marker
+        for i, marker in enumerate(self.detected_markers):
             color = marker.get('primary_color', 'Unknown')
             confidence = marker['confidence']
-            stripe_count = marker.get('stripe_count', 3)
-            stripes_in_group = marker.get('stripes_in_group', stripe_count)
+            stripes = marker.get('stripes_in_group', marker.get('stripe_count', 3))
             
-            results_text += f"Cable #{cable_id}\n"
-            results_text += f"  Color: {color}\n"
-            results_text += f"  Confidence: {confidence:.1f}%\n"
-            results_text += f"  Stripes: {stripes_in_group}\n\n"
-        
-        total_stripes = sum(m.get('stripes_in_group', m.get('stripe_count', 3)) for m in self.detected_markers)
-        results_text += "=" * 35 + "\n"
-        results_text += f"Total: {len(self.detected_markers)} marking(s)\n"
-        results_text += f"Stripes: {total_stripes}\n"
-        
-        self.results_text.insert("1.0", results_text)
+            # Card Container
+            card = ctk.CTkFrame(self.results_scroll, fg_color=self.colors["bg"], corner_radius=8)
+            card.pack(fill="x", pady=(0, 10))
+            
+            # Card Content
+            content = ctk.CTkFrame(card, fg_color="transparent")
+            content.pack(fill="x", padx=10, pady=10)
+            
+            # Left: Color Indicator
+            indicator_color = self._get_color_hex(color)
+            indicator = ctk.CTkLabel(content, text="●", text_color=indicator_color, font=ctk.CTkFont(size=18))
+            indicator.pack(side="left", padx=(0, 10))
+            
+            # Middle: Info
+            info_frame = ctk.CTkFrame(content, fg_color="transparent")
+            info_frame.pack(side="left", fill="both", expand=True)
+            
+            ctk.CTkLabel(
+                info_frame, 
+                text=f"{color} Marker", 
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=self.colors["text"],
+                anchor="w"
+            ).pack(fill="x")
+            
+            ctk.CTkLabel(
+                info_frame, 
+                text=f"{stripes} Stripes | ID #{i+1}", 
+                font=ctk.CTkFont(size=11),
+                text_color=self.colors["text_secondary"],
+                anchor="w"
+            ).pack(fill="x")
+            
+            # Right: Confidence
+            badge = ctk.CTkFrame(content, fg_color=self.colors["surface"], corner_radius=12)
+            badge.pack(side="right")
+            
+            ctk.CTkLabel(
+                badge,
+                text=f"{int(confidence)}%",
+                font=ctk.CTkFont(size=11, weight="bold"),
+                text_color=self.colors["success"] if confidence > 80 else self.colors["warning"]
+            ).pack(padx=8, pady=2)
+            
+    def _get_color_hex(self, color_name):
+        """Helper to get hex code for UI indicators"""
+        colors = {
+            "Yellow": "#facc15",
+            "Blue": "#3b82f6", 
+            "Green": "#22c55e",
+            "Red": "#ef4444",
+            "White": "#f8fafc",
+            "Pink": "#ec4899",
+            "Grey": "#9ca3af"
+        }
+        return colors.get(color_name, "#94a3b8")
         
     def reset_view(self):
         """Reset to original image"""
         if self.original_image is not None:
             self.current_display = self.original_image.copy()
             self.display_image(self.current_display)
-            self.status_label.configure(text="Reset to original image")
+            self.header_status.configure(text="● Reset View", text_color=self.colors["text_secondary"])
             
     
     # def auto_save_detection(self): <-- Removed method
@@ -743,7 +691,7 @@ class CableMarkerApp:
         if file_path:
             cv2.imwrite(file_path, self.processed_image)
             messagebox.showinfo("Success", f"Saved to:\n{file_path}")
-            self.status_label.configure(text=f"Saved: {os.path.basename(file_path)}")
+            self.header_status.configure(text="● Saved Successfully", text_color=self.colors["success"])
             
     def on_color_filter_changed(self, choice):
         """Handle color filter change"""
@@ -768,11 +716,12 @@ class CableMarkerApp:
                 marker_count = len(self.detected_markers)
                 total_count = len(self.all_detected_markers)
                 if choice != "All":
-                    self.status_label.configure(
-                        text=f"Filtered: {marker_count} {choice.lower()} of {total_count} total"
+                    self.header_status.configure(
+                        text=f"● Filter: {marker_count}/{total_count} {choice}",
+                        text_color=self.colors["warning"]
                     )
                 else:
-                    self.status_label.configure(text=f"Showing all {total_count} marker(s)")
+                    self.header_status.configure(text=f"● Showing All {total_count}", text_color=self.colors["success"])
     
     def get_available_cameras(self):
         """Get available cameras including simulation mode"""
@@ -782,8 +731,15 @@ class CableMarkerApp:
         cameras.append("📷 Simulate Loaded Image")
         cameras.append("---")
         
-        for i in range(10):
-            cap = cv2.VideoCapture(i)
+        # Check specifically for macOS
+        import platform
+        system = platform.system()
+        backend = cv2.CAP_ANY
+        if system == 'Darwin':
+            backend = cv2.CAP_AVFOUNDATION
+            
+        for i in range(5): # Reduced range to speed up startup
+            cap = cv2.VideoCapture(i, backend)
             if cap.isOpened():
                 cameras.append(f"Camera {i}")
                 cap.release()
@@ -821,7 +777,12 @@ class CableMarkerApp:
             print(f"📷 Starting local camera loop on device {self.camera_index}...")
             
             # Initialize camera capture locally
-            self.camera = cv2.VideoCapture(self.camera_index)
+            import platform
+            system = platform.system()
+            if system == 'Darwin':
+                self.camera = cv2.VideoCapture(self.camera_index, cv2.CAP_AVFOUNDATION)
+            else:
+                self.camera = cv2.VideoCapture(self.camera_index)
             if not self.camera.isOpened():
                 messagebox.showerror("Error", f"Failed to open Camera {self.camera_index}")
                 return
@@ -843,8 +804,7 @@ class CableMarkerApp:
             if hasattr(self, 'placeholder_icon'):
                 self.placeholder_icon.place_forget()
 
-            self.status_label.configure(text=f"Camera active - starting inference...")
-            self.header_status.configure(text="● Starting", text_color=self.colors["warning"])
+            self.header_status.configure(text="● Starting Camera...", text_color=self.colors["warning"])
             
             def camera_loop():
                 """Background thread: Read Camera -> Display Smooth Video -> Async Inference"""
@@ -966,11 +926,15 @@ class CableMarkerApp:
                             
                             # 5. Update Status
                             if filtered_detections:
-                                self.status_label.configure(text=f"Live: {len(filtered_detections)} marker(s)")
-                                self.header_status.configure(text="● Detected", text_color=self.colors["success"])
+                                self.header_status.configure(
+                                    text=f"● Live: {len(filtered_detections)} Detected", 
+                                    text_color=self.colors["success"]
+                                )
                             else:
-                                self.status_label.configure(text="Live: Scanning...")
-                                self.header_status.configure(text="● Scanning", text_color=self.colors["primary"])
+                                self.header_status.configure(
+                                    text="● Live: Scanning...", 
+                                    text_color=self.colors["primary"]
+                                )
                                 
                         self.root.after(0, update_ui_components)
                         
@@ -1017,7 +981,7 @@ class CableMarkerApp:
         if hasattr(self, 'placeholder_icon'):
             self.placeholder_icon.place_forget()
             
-        self.status_label.configure(text="Simulation Mode Active")
+        self.header_status.configure(text="● Simulation Active", text_color=self.colors["warning"])
         self.header_status.configure(text="● Simulating", text_color=self.colors["warning"])
         
         print("✅ Simulation Mode started")
@@ -1120,7 +1084,7 @@ class CableMarkerApp:
         if hasattr(self, 'placeholder_icon'):
             self.placeholder_icon.place(relx=0.5, rely=0.4, anchor="center")
         
-        self.status_label.configure(text="Stopped")
+        self.header_status.configure(text="● Stopped", text_color=self.colors["text_secondary"])
         self.header_status.configure(text="● Ready", text_color=self.colors["success"])
         print("✅ Stopped")
     
@@ -1136,29 +1100,23 @@ class CableMarkerApp:
     def test_gpio(self):
         """Test GPIO functionality"""
         def run_test():
-            self.status_label.configure(text="Testing GPIO...")
-            self.gpio_test_btn.configure(state="disabled")
+            self.header_status.configure(text="● Testing GPIO...", text_color=self.colors["warning"])
+            # self.root.update() # Avoid calling update in thread
             
             # Run test
             success = self.gpio_controller.test_gpio()
-            
-            # Update status
             if success:
-                self.status_label.configure(text="GPIO test passed!")
-                self.gpio_status_label.configure(
-                    text="Status: ✅ Ready",
-                    text_color=self.colors["success"]
-                )
+                self.header_status.configure(text="● GPIO Test Passed", text_color=self.colors["success"])
+                self.gpio_status_label.configure(text="Get Status: Active", text_color=self.colors["success"])
+                messagebox.showinfo("Success", "GPIO Test Sequence Completed")
             else:
-                self.status_label.configure(text="GPIO test failed!")
-                self.gpio_status_label.configure(
-                    text="Status: ❌ Failed",
-                    text_color=self.colors["error"]
-                )
-            
-            # Re-enable button
-            self.root.after(3000, lambda: self.gpio_test_btn.configure(state="normal"))
-            self.root.after(3000, lambda: self.status_label.configure(text="Ready"))
+                self.header_status.configure(text="● GPIO Test Failed", text_color=self.colors["error"])
+                self.gpio_status_label.configure(text="Status: Error", text_color=self.colors["error"])
+                messagebox.showerror("Error", "GPIO Test Failed")
+                
+            self.gpio_test_btn.configure(state="normal")
+            # Reset status after delay
+            self.root.after(3000, lambda: self.header_status.configure(text="● Ready", text_color=self.colors["success"]))
         
             # Run test in background thread
             thread = threading.Thread(target=run_test, daemon=True)
@@ -1206,7 +1164,7 @@ class CableMarkerApp:
         """Reset ROI to full image"""
         self.roi = None
         self.reset_roi_btn.configure(state="disabled")
-        self.status_label.configure(text="ROI cleared - Detecting full frame")
+        self.header_status.configure(text="● ROI Cleared", text_color=self.colors["success"])
         
         # Trigger re-detection/update
         if not self.camera_active and self.original_image is not None:
@@ -1290,7 +1248,7 @@ class CableMarkerApp:
             self.roi = (orig_x, orig_y, orig_w, orig_h)
             
             print(f"ROI Selected: {self.roi}")
-            self.status_label.configure(text=f"ROI Active: {orig_w}x{orig_h}")
+            self.header_status.configure(text=f"● ROI Active: {orig_w}x{orig_h}", text_color=self.colors["warning"])
             self.reset_roi_btn.configure(state="normal")
             
             # Reset selection mode

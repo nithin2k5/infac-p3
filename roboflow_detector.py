@@ -34,7 +34,7 @@ class RoboflowDetector:
     Uses direct model inference for consistent results with Roboflow website.
     """
     
-    def __init__(self, min_confidence=0.60, grouping_distance=250, grouping_horizontal_distance=500, max_area_ratio=0.5):
+    def __init__(self, min_confidence=0.50, grouping_distance=250, grouping_horizontal_distance=500, max_area_ratio=0.5):
         self.client = None
         self.workspace_name = "cable-evfad"
         # self.workflow_id = "small-object-detection-sahi" # Removed legacy workflow
@@ -46,7 +46,7 @@ class RoboflowDetector:
         self.project = None
         self.model = None
         self.roboflow_project_name = "infacp3"  # Project name from Roboflow workspace
-        self.roboflow_model_version = "9"  # Model version
+        self.roboflow_model_version = "13"  # Model version
         
         # Detection parameters
         self.min_confidence = min_confidence

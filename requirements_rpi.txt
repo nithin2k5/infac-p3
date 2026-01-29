@@ -14,9 +14,10 @@ requests>=2.23.0
 roboflow>=1.2.0
 
 # Raspberry Pi GPIO
-# Install system package first: sudo apt-get install python3-rpi.gpio
-# OR install via pip: pip install RPi.GPIO
-RPi.GPIO>=0.7.1
+# Install system package first: sudo apt-get install python3-rpi-lgpio
+# OR install via pip: pip install RPi.GPIO (Pi 3/4) OR pip install rpi-lgpio (Pi 5)
+rpi-lgpio>=0.6  # Drop-in replacement for RPi.GPIO on Pi 5
+# RPi.GPIO>=0.7.1 # Legacy (kept for Pi 3/4 if needed, but rpi-lgpio is preferred on new OS)
 
 # Optional: For better camera performance on Raspberry Pi
 # Uncomment if you want to use these:
