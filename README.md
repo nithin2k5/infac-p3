@@ -250,8 +250,6 @@ The script will:
 - Set up display environment
 - Run the application
 
-### Method 2: Manual Run
-
 ```bash
 # Activate virtual environment
 source venv/bin/activate
@@ -263,32 +261,22 @@ export DISPLAY=:0
 python app.py
 ```
 
-### Method 3: Run as Service (Production)
+---
 
-Create a systemd service file `/etc/systemd/system/cable-detector.service`:
+## 📁 Project Structure
 
-```ini
-[Unit]
-Description=Cable Marker Detection System
-After=network.target
+Organized for better maintainability:
 
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/infac-p3
-Environment="DISPLAY=:0"
-ExecStart=/home/pi/infac-p3/venv/bin/python /home/pi/infac-p3/app.py
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-```bash
-sudo systemctl enable cable-detector.service
-sudo systemctl start cable-detector.service
-```
+- **`app.py`**: Main dashboard application (GUI).
+- **`roboflow_detector.py`**: Core detection logic and API integration.
+- **`gpio_controller.py`**: Hardware control for Raspberry Pi.
+- **`docs/`**: Consolidated guides and documentation.
+  - `RASPBERRY_PI_GUIDE.md`: Comprehensive Pi setup guide.
+  - `USAGE.md`: Detailed feature and usage guide.
+- **`scripts/`**: Utility scripts for camera and inference testing.
+  - `verify_latency.py`: Performance verification script.
+  - `test_camera.py`: Quick camera diagnostic.
+- **`dataset/`**: Local cache of images and labels used for training/validation.
 
 ---
 

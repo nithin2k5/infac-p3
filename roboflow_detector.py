@@ -2,7 +2,7 @@
 Roboflow Cable Marker Detector
 
 Features:
-- Static image detection via Roboflow model (infacp3/v9)
+- Static image detection via Roboflow model (infacep4/2)
 - Batch video processing via Roboflow Python SDK
 
 Usage:
@@ -25,7 +25,7 @@ import os
 
 class RoboflowDetector:
     """
-    Cable marker detector using Roboflow model (infacp3/v9)
+    Cable marker detector using Roboflow model (infacep4/2)
 
     Capabilities:
     - Static image detection via Roboflow Python SDK (detect_markers method)
@@ -36,17 +36,17 @@ class RoboflowDetector:
     
     def __init__(self, min_confidence=0.50, grouping_distance=250, grouping_horizontal_distance=500, max_area_ratio=0.5):
         self.client = None
-        self.workspace_name = "cable-evfad"
+        self.workspace_name = "infac"
         # self.workflow_id = "small-object-detection-sahi" # Removed legacy workflow
-        self.api_key = "os34K4b17ImpAhsyrIiz"
+        self.api_key = "INxX0Lc0epqPhQXpIWj9"
         self.api_url = "https://serverless.roboflow.com"
 
         # Roboflow Python SDK components
         self.rf = None
         self.project = None
         self.model = None
-        self.roboflow_project_name = "infacp3"  # Project name from Roboflow workspace
-        self.roboflow_model_version = "13"  # Model version
+        self.roboflow_project_name = "infacep4"  # Project name from Roboflow workspace
+        self.roboflow_model_version = "3"  # Model version
         
         # Detection parameters
         self.min_confidence = min_confidence
@@ -170,7 +170,8 @@ class RoboflowDetector:
     
     def detect_markers(self, image: np.ndarray) -> List[Dict]:
         """
-        Detect markers in a static image using direct Roboflow model inference
+        Detect markers in a static image.
+        Prioritizes Inference SDK (memory-based) over Roboflow SDK (file-based) for speed.
         
         Args:
             image: Input image as numpy array (BGR format from OpenCV)
@@ -178,99 +179,121 @@ class RoboflowDetector:
         Returns:
             List of detected marker dictionaries
         """
-        if not self._roboflow_initialized or not self.model:
-            print("\n" + "="*60)
-            print("❌ ERROR: Roboflow model not initialized!")
-            print("="*60)
-            print("Detection requires the Roboflow Python SDK.")
-            print("\nTo fix this:")
-            print("  1. Install the package: pip install roboflow")
-            print("  2. Or install all requirements: pip install -r requirements.txt")
-            print("  3. Restart the application")
-            print("="*60 + "\n")
-            return []
-        
         if image is None or image.size == 0:
             print("❌ Invalid image provided")
             return []
+
+        # If Inference SDK is initialized, use it (it's faster as it avoids disk I/O)
+        if self._inference_initialized and self.client:
+            return self.detect_single_frame(image)
+
+        # Fallback to Roboflow Python SDK (slower, requires temp file)
+        if not self._roboflow_initialized or not self.model:
+            print("⚠️ Roboflow model not initialized for fallback detection")
+            return []
         
         try:
-            print(f"📸 Detecting markers using Roboflow model {self.roboflow_project_name}/v{self.roboflow_model_version}...")
-            print(f"   Image size: {image.shape[1]}x{image.shape[0]}")
-            print(f"   Confidence threshold: {self.min_confidence * 100}%")
+            orig_h, orig_w = image.shape[:2]
+
+            # Speed optimization: resize to max 416px before upload (matches detect_single_frame)
+            MAX_SIDE = 416
+            scale = min(MAX_SIDE / orig_w, MAX_SIDE / orig_h, 1.0)
+            if scale < 1.0:
+                infer_w = int(orig_w * scale)
+                infer_h = int(orig_h * scale)
+                infer_image = cv2.resize(image, (infer_w, infer_h), interpolation=cv2.INTER_LINEAR)
+            else:
+                infer_image = image
+                scale = 1.0
+
+            print(f"📸 Detecting markers (fallback mode, {infer_image.shape[1]}x{infer_image.shape[0]})...")
             
-            # Save image to temporary file
             import tempfile
             import os
             
             with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
                 tmp_path = tmp_file.name
-                # Save with good quality for accurate detection
-                cv2.imwrite(tmp_path, image, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                cv2.imwrite(tmp_path, infer_image, [cv2.IMWRITE_JPEG_QUALITY, 30])
             
             try:
-                print(f"⏳ Running inference on image...")
-                
-                # Use direct Roboflow model inference
+                # Use Roboflow model inference
                 result = self.model.predict(
                     tmp_path,
-                    confidence=int(self.min_confidence * 100),  # Convert to percentage
-                    overlap=30
+                    confidence=int(self.min_confidence * 100),
                 )
                 
-                print(f"✅ Received model predictions")
+                raw_markers = self._parse_roboflow_predictions(result, infer_image.shape[1], infer_image.shape[0])
                 
-                # Parse results from Roboflow model
-                raw_markers = self._parse_roboflow_predictions(result, image.shape[1], image.shape[0])
-                
-                print(f"✅ Detection complete: {len(raw_markers)} raw result(s) returned")
+                # Scale bounding boxes back to original resolution
+                if scale < 1.0:
+                    inv = 1.0 / scale
+                    for m in raw_markers:
+                        bb = m["bounding_box"]
+                        bb["x"] = int(bb["x"] * inv)
+                        bb["y"] = int(bb["y"] * inv)
+                        bb["width"] = int(bb["width"] * inv)
+                        bb["height"] = int(bb["height"] * inv)
+                        cx, cy = m["center"]
+                        m["center"] = (int(cx * inv), int(cy * inv))
                 
                 return raw_markers
                 
             finally:
-                # Clean up temporary file
-                try:
-                    if os.path.exists(tmp_path):
-                        os.unlink(tmp_path)
-                except Exception as e:
-                    print(f"⚠️ Warning: Could not delete temp file: {e}")
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
                     
         except Exception as e:
-            print(f"❌ Error with Roboflow model inference: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"❌ Error with Roboflow fallback inference: {e}")
             return []
     def detect_single_frame(self, frame: np.ndarray) -> List[Dict]:
         """
         Detect markers in a single frame using InferenceHTTPClient (faster than model.predict for streams)
-        
+
         Args:
             frame: Input frame as numpy array (BGR)
-            
+
         Returns:
             List of detected marker dictionaries
         """
         if not self._inference_initialized or not self.client:
             # Fallback to slower method if SDK not ready
             return self.detect_markers(frame)
-            
+
         try:
-            # Use InferenceHTTPClient for direct in-memory inference
-            # This avoids writing to disk
+            orig_h, orig_w = frame.shape[:2]
+
+            # ── Extreme Speed optimisation: resize to max 320px ──
+            MAX_SIDE = 320
+            scale = min(MAX_SIDE / orig_w, MAX_SIDE / orig_h, 1.0)
+            if scale < 1.0:
+                infer_w = int(orig_w * scale)
+                infer_h = int(orig_h * scale)
+                infer_frame = cv2.resize(frame, (infer_w, infer_h), interpolation=cv2.INTER_LINEAR)
+            else:
+                infer_frame = frame
+                scale = 1.0
+
             result = self.client.infer(
-                frame,
+                infer_frame,
                 model_id=f"{self.roboflow_project_name}/{self.roboflow_model_version}"
             )
-            
-            # Result format from client.infer is usually a dict
-            # We can reuse the parsing logic if we wrap it or handle the dict
-            
-            # Adapt result for parsing logic
-            # _parse_roboflow_predictions expects something it can access .json() or dict
-            # client.infer typically returns a dict directly
-            
-            return self._parse_roboflow_predictions(result, frame.shape[1], frame.shape[0])
-            
+
+            detections = self._parse_roboflow_predictions(result, infer_frame.shape[1], infer_frame.shape[0])
+
+            # Scale bounding boxes back to original resolution
+            if scale < 1.0:
+                inv = 1.0 / scale
+                for d in detections:
+                    bb = d["bounding_box"]
+                    bb["x"] = int(bb["x"] * inv)
+                    bb["y"] = int(bb["y"] * inv)
+                    bb["width"] = int(bb["width"] * inv)
+                    bb["height"] = int(bb["height"] * inv)
+                    cx, cy = d["center"]
+                    d["center"] = (int(cx * inv), int(cy * inv))
+
+            return detections
+
         except Exception as e:
             print(f"⚠️ Single frame inference failed: {e}")
             return []

@@ -29,7 +29,18 @@ pip install --upgrade pyinstaller
 
             # Build using the spec file
             echo "🔨 Building executable..."
-            pyinstaller build.spec --clean
+            # Build using the spec file
+            echo "🔨 Building executable..."
+            pyinstaller main_rpi.spec --clean
+
+            # Create desktop shortcut
+            echo "🔗 Creating desktop shortcut..."
+            cp CableMarkerDetector.desktop /home/$(whoami)/Desktop/
+            chmod +x /home/$(whoami)/Desktop/CableMarkerDetector.desktop
+            
+            # Application menu integration
+            mkdir -p /home/$(whoami)/.local/share/applications
+            cp CableMarkerDetector.desktop /home/$(whoami)/.local/share/applications/
 
 if [ $? -eq 0 ]; then
     echo "✅ Build successful!"

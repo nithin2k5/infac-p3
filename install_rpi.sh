@@ -31,6 +31,7 @@ sudo apt-get install -y \
     python3-venv \
     python3-dev \
     python3-rpi.gpio \
+    python3-rpi-lgpio \
     libopencv-dev \
     python3-opencv \
     libatlas-base-dev \

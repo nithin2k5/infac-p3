@@ -17,7 +17,9 @@ a = Analysis(
         'numpy',
         'requests',
         'roboflow',
-        'RPi.GPIO',  # Raspberry Pi GPIO support
+        'RPi.GPIO',  # Legacy Raspberry Pi GPIO support
+        'rpi_lgpio', # Pi 5 GPIO support
+        'lgpio',     # Pi 5 GPIO backend
     ],
     hookspath=[],
     hooksconfig={},

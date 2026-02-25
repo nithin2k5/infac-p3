@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Infac Cable Marker Detector
+Comment=Launch Cable Marker Detection System
+Exec=/home/pi/infac-p3/dist/cable_marker_detector/cable_marker_detector
+Icon=/home/pi/infac-p3/icon.png
+Path=/home/pi/infac-p3/dist/cable_marker_detector/
+Terminal=true
+Categories=Utility;Application;
+StartupNotify=true

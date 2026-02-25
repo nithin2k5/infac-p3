@@ -56,7 +56,7 @@ class CableMarkerApp:
         
         # Initialize detector
         self.detector = RoboflowDetector(
-            min_confidence=0.50,
+            min_confidence=0.40,
             grouping_distance=250,
             grouping_horizontal_distance=500
         )
@@ -88,7 +88,15 @@ class CableMarkerApp:
         self.camera_active = False
         self.camera_index = 0
         self.capture_thread = None
-        # self.show_detection_pause = False  <-- Removed
+        
+        # Parallel Inference Performance (Optimized for Cloud Latency)
+        import concurrent.futures
+        self.inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
+        self.inference_counter = 0      # IDs for outgoing requests
+        self.completed_inference_id = -1 # ID of the latest processed result
+        self.active_inference_count = 0  # Track current threads in flight
+        self.inference_lock = threading.Lock() # Lock for counters
+        
         self.live_detected_markers = []
         
 
@@ -412,40 +420,58 @@ class CableMarkerApp:
 
         
     def load_image(self):
-        """Load image from file"""
+        """Load image or video from file"""
+        VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".m4v"}
+
         file_path = filedialog.askopenfilename(
-            title="Select Image",
+            title="Select Image or Video",
             filetypes=[
+                ("Image & Video files",
+                 "*.jpg *.jpeg *.png *.bmp *.tiff "
+                 "*.mp4 *.avi *.mov *.mkv *.wmv *.flv *.m4v"),
                 ("Image files", "*.jpg *.jpeg *.png *.bmp *.tiff"),
-                ("All files", "*.*")
+                ("Video files", "*.mp4 *.avi *.mov *.mkv *.wmv *.flv *.m4v"),
+                ("All files", "*.*"),
             ]
         )
-        
-        if file_path:
-            self.image_path = file_path
-            self.original_image = cv2.imread(file_path)
-            
-            if self.original_image is None:
-                messagebox.showerror("Error", "Failed to load image!")
-                return
-            
-            self.current_display = self.original_image.copy()
-            self.display_image(self.current_display)
-            
-            self.reset_btn.configure(state="normal")
-            self.detected_markers = []
-            self.all_detected_markers = []
-            self.results_text.delete("1.0", "end")
-            self.results_text.insert("1.0", "Image loaded. Running detection...\n")
-            self.markers_count.configure(text="0")
-            self.color_filter_var.set("All")
-            self.selected_color_filter = "All"
-            
-            self.header_status.configure(text=f"● Loading: {os.path.basename(file_path)}", text_color=self.colors["warning"])
 
-            self.root.update()
-            
-            self.detect_markers()
+        if not file_path:
+            return
+
+        ext = os.path.splitext(file_path)[1].lower()
+
+        # --- Video path ---
+        if ext in VIDEO_EXTENSIONS:
+            if self.camera_active:
+                self.stop_camera()
+            self._pending_video_path = file_path
+            self.start_video_file_mode(file_path)
+            return
+
+        # --- Image path ---
+        self.image_path = file_path
+        self.original_image = cv2.imread(file_path)
+
+        if self.original_image is None:
+            messagebox.showerror("Error", "Failed to load image!")
+            return
+
+        self.current_display = self.original_image.copy()
+        self.display_image(self.current_display)
+
+        self.reset_btn.configure(state="normal")
+        self.detected_markers = []
+        self.all_detected_markers = []
+        self.markers_count.configure(text="0")
+        self.color_filter_var.set("All Colors")
+        self.selected_color_filter = "All"
+
+        self.header_status.configure(
+            text=f"● Loading: {os.path.basename(file_path)}",
+            text_color=self.colors["warning"]
+        )
+        self.root.update()
+        self.detect_markers()
             
     def display_image(self, image):
         """Display image on canvas"""
@@ -724,26 +750,29 @@ class CableMarkerApp:
                     self.header_status.configure(text=f"● Showing All {total_count}", text_color=self.colors["success"])
     
     def get_available_cameras(self):
-        """Get available cameras including simulation mode"""
+        """Get available cameras including simulation and video file modes"""
         cameras = ["Select Camera"]
-        
+
+        # Add Video File option
+        cameras.append("📹 Load Video File")
+
         # Add Simulation Mode option
         cameras.append("📷 Simulate Loaded Image")
         cameras.append("---")
-        
+
         # Check specifically for macOS
         import platform
         system = platform.system()
         backend = cv2.CAP_ANY
         if system == 'Darwin':
             backend = cv2.CAP_AVFOUNDATION
-            
-        for i in range(5): # Reduced range to speed up startup
+
+        for i in range(5):  # Reduced range to speed up startup
             cap = cv2.VideoCapture(i, backend)
             if cap.isOpened():
                 cameras.append(f"Camera {i}")
                 cap.release()
-                
+
         return cameras
     
     def on_camera_selected(self, choice):
@@ -751,10 +780,12 @@ class CableMarkerApp:
         if not choice or choice == "Select Camera" or choice == "---":
             self.camera_start_btn.configure(state="disabled")
             return
-            
+
         self.camera_start_btn.configure(state="normal")
-        
-        if "Simulate Loaded Image" in choice:
+
+        if "Load Video File" in choice:
+            self.camera_index = -2  # Special index for video file
+        elif "Simulate Loaded Image" in choice:
             self.camera_index = -1  # Special index for simulation
         elif "Camera" in choice:
             try:
@@ -766,7 +797,12 @@ class CableMarkerApp:
         """Start Local Camera Loop for real-time detection"""
         if self.camera_active:
             return
-        
+
+        # Check for Video File Mode
+        if self.camera_index == -2:
+            self.start_video_file_mode()
+            return
+
         # Check for Simulation Mode
         if self.camera_index == -1:
             self.start_simulation_mode()
@@ -813,6 +849,8 @@ class CableMarkerApp:
                 # Inference state
                 self.latest_detections_lock = threading.Lock()
                 self.is_inferencing = False
+                last_inference_time = 0.0
+                MIN_INFERENCE_INTERVAL = 0.05  # 20 FPS target (assuming sufficient threads)
                 
                 while self.camera_active and self.camera.isOpened():
                     try:
@@ -828,13 +866,21 @@ class CableMarkerApp:
                         self.original_image = frame.copy()
                         
                         # --- ASYNC INFERENCE ---
-                        # Only start new inference if previous one finished
-                        if not self.is_inferencing:
-                            
-                            def run_inference_job(input_frame):
+                        # Start new inference if we have capacity AND interval elapsed
+                        now = time.time()
+                        can_start = False
+                        with self.inference_lock:
+                            # Allow up to 10 concurrent requests for continuous feel
+                            if self.active_inference_count < 10 and (now - last_inference_time) >= MIN_INFERENCE_INTERVAL:
+                                can_start = True
+                                self.active_inference_count += 1
+                                self.inference_counter += 1
+                                current_job_id = self.inference_counter
+                                last_inference_time = now
+                        
+                        if can_start:
+                            def run_inference_job(input_frame, job_id):
                                 try:
-                                    self.is_inferencing = True
-                                    
                                     # Prepare input frame (crop if ROI set)
                                     detect_frame = input_frame
                                     offset_x, offset_y = 0, 0
@@ -855,7 +901,7 @@ class CableMarkerApp:
                                     detections = self.detector.detect_single_frame(detect_frame)
                                     
                                     # Adjust coordinates if ROI used
-                                    if offset_x > 0 or offset_y > 0 and detections:
+                                    if offset_x > 0 or (offset_y > 0 and detections):
                                         for marker in detections:
                                             if 'bounding_box' in marker:
                                                 marker['bounding_box']['x'] += offset_x
@@ -867,21 +913,22 @@ class CableMarkerApp:
                                     
                                     # Group stripes
                                     if detections:
-                                        grouped = self.detector._group_stripes_into_markings(detections)
-                                        detections = grouped
+                                        detections = self.detector._group_stripes_into_markings(detections)
                                     
-                                    # Update detections safely
+                                    # Update detections safely, only if it's the latest result
                                     with self.latest_detections_lock:
-                                        self.all_detected_markers = detections
+                                        if job_id > self.completed_inference_id:
+                                            self.all_detected_markers = detections
+                                            self.completed_inference_id = job_id
                                         
                                 except Exception as e:
                                     print(f"⚠️ Inference error: {e}")
                                 finally:
-                                    self.is_inferencing = False
+                                    with self.inference_lock:
+                                        self.active_inference_count -= 1
                             
-                            # Start inference in background
-                            inf_thread = threading.Thread(target=run_inference_job, args=(frame.copy(),), daemon=True)
-                            inf_thread.start()
+                            # Start parallel inference job
+                            self.inference_executor.submit(run_inference_job, frame.copy(), current_job_id)
                         
                         # --- RENDER Loop (Runs at full camera FPS) ---
                         
@@ -1062,6 +1109,162 @@ class CableMarkerApp:
         self.capture_thread = threading.Thread(target=simulate_loop, daemon=True)
         self.capture_thread.start()
     
+    def start_video_file_mode(self, file_path: str = None):
+        """Open a video file and run detection frame-by-frame"""
+        if not file_path:
+            file_path = filedialog.askopenfilename(
+                title="Select Video File",
+                filetypes=[
+                    ("Video files", "*.mp4 *.avi *.mov *.mkv *.wmv *.flv *.m4v"),
+                    ("All files", "*.*")
+                ]
+            )
+        if not file_path:
+            return  # User cancelled
+
+        cap = cv2.VideoCapture(file_path)
+        if not cap.isOpened():
+            messagebox.showerror("Error", f"Failed to open video:\n{file_path}")
+            return
+
+        self.camera = cap  # Reuse camera slot for cleanup
+        self.camera_active = True
+        self.simulation_running = False
+
+        self.camera_start_btn.configure(state="disabled")
+        self.camera_stop_btn.configure(state="normal")
+        self.camera_dropdown.configure(state="disabled")
+
+        if self.placeholder:
+            self.placeholder.place_forget()
+        if hasattr(self, 'placeholder_icon'):
+            self.placeholder_icon.place_forget()
+
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        frame_delay = 1.0 / fps  # Sleep to maintain original video speed
+        video_name = os.path.basename(file_path)
+        self.header_status.configure(text=f"● Video: {video_name}", text_color=self.colors["warning"])
+        print(f"🎬 Playing video: {video_name}  ({fps:.1f} FPS)")
+
+        self.latest_detections_lock = threading.Lock()
+        self.is_inferencing = False
+
+        def video_loop():
+            nonlocal cap
+            while self.camera_active:
+                try:
+                    ret, frame = cap.read()
+                    if not ret:
+                        # End of video — loop back to start
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        ret, frame = cap.read()
+                        if not ret:
+                            break
+
+                    self.original_image = frame.copy()
+
+                    # --- ASYNC INFERENCE ---
+                    can_start = False
+                    with self.inference_lock:
+                        if self.active_inference_count < 10:
+                            can_start = True
+                            self.active_inference_count += 1
+                            self.inference_counter += 1
+                            current_job_id = self.inference_counter
+                    
+                    if can_start:
+                        def run_inference_job(input_frame, job_id):
+                            try:
+                                detect_frame = input_frame
+                                offset_x, offset_y = 0, 0
+
+                                if self.roi:
+                                    x, y, w, h = self.roi
+                                    img_h, img_w = input_frame.shape[:2]
+                                    x = max(0, min(x, img_w))
+                                    y = max(0, min(y, img_h))
+                                    w = min(w, img_w - x)
+                                    h = min(h, img_h - y)
+                                    if w > 0 and h > 0:
+                                        detect_frame = input_frame[y:y+h, x:x+w]
+                                        offset_x, offset_y = x, y
+
+                                detections = self.detector.detect_single_frame(detect_frame)
+
+                                if (offset_x > 0 or offset_y > 0) and detections:
+                                    for marker in detections:
+                                        if 'bounding_box' in marker:
+                                            marker['bounding_box']['x'] += offset_x
+                                            marker['bounding_box']['y'] += offset_y
+                                        if 'center' in marker:
+                                            cx, cy = marker['center']
+                                            marker['center'] = (cx + offset_x, cy + offset_y)
+
+                                if detections:
+                                    detections = self.detector._group_stripes_into_markings(detections)
+
+                                with self.latest_detections_lock:
+                                    if job_id > self.completed_inference_id:
+                                        self.all_detected_markers = detections
+                                        self.completed_inference_id = job_id
+                            except Exception as e:
+                                print(f"⚠️ Video inference error: {e}")
+                            finally:
+                                with self.inference_lock:
+                                    self.active_inference_count -= 1
+
+                        self.inference_executor.submit(run_inference_job, frame.copy(), current_job_id)
+
+                    # --- RENDER ---
+                    with self.latest_detections_lock:
+                        current_all = self.all_detected_markers.copy() if hasattr(self, 'all_detected_markers') else []
+
+                    self.all_detected_markers = current_all
+                    self.apply_color_filter()
+                    filtered = self.detected_markers.copy()
+
+                    if filtered:
+                        display_frame = self.detector.draw_detections(frame, filtered)
+                    else:
+                        display_frame = frame.copy()
+                    self.processed_image = display_frame
+
+                    if self.roi:
+                        rx, ry, rw, rh = self.roi
+                        cv2.rectangle(display_frame, (rx, ry), (rx+rw, ry+rh), (0, 255, 255), 2)
+                        cv2.putText(display_frame, "ROI ACTIVE", (rx, ry-10),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+                    def update_ui(df=display_frame, fd=filtered):
+                        self.display_image(df)
+                        self.markers_count.configure(text=f"{len(fd)}")
+                        self.gpio_controller.process_detected_colors(fd)
+                        if fd:
+                            self.header_status.configure(
+                                text=f"● Video: {len(fd)} Detected",
+                                text_color=self.colors["success"]
+                            )
+                        else:
+                            self.header_status.configure(
+                                text=f"● Video: {video_name}",
+                                text_color=self.colors["primary"]
+                            )
+
+                    self.root.after(0, update_ui)
+                    time.sleep(frame_delay)
+
+                except Exception as e:
+                    print(f"⚠️ Video loop error: {e}")
+                    time.sleep(0.5)
+
+            cap.release()
+            self.camera = None
+            print("🛑 Video file playback stopped")
+
+        self.capture_thread = threading.Thread(target=video_loop, daemon=True)
+        self.capture_thread.start()
+        print("✅ Video file mode started")
+
     def stop_camera(self):
         """Stop Camera or Simulation"""
         print("Stopping camera/simulation...")
