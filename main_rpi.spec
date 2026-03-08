@@ -17,6 +17,8 @@ a = Analysis(
         'numpy',
         'requests',
         'roboflow',
+        'inference_sdk',
+        'inference_sdk.webrtc',
         'RPi.GPIO',  # Legacy Raspberry Pi GPIO support
         'rpi_lgpio', # Pi 5 GPIO support
         'lgpio',     # Pi 5 GPIO backend

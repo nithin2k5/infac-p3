@@ -17,6 +17,8 @@ a = Analysis(
         'numpy',
         'requests',
         'roboflow',
+        'inference_sdk',
+        'inference_sdk.webrtc',
         'RPi.GPIO',  # Raspberry Pi GPIO support
         'threading',
         'platform',

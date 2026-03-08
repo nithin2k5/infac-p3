@@ -33,23 +33,24 @@ class CableMarkerApp:
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("dark-blue")  # Updated theme
         
-        # Modern, Professional Color Scheme
+        # Classic Professional Dark Palette
         self.colors = {
-            "bg": "#0f172a",          # Slate 900
-            "surface": "#1e293b",     # Slate 800
-            "primary": "#3b82f6",     # Blue 500
-            "primary_hover": "#2563eb", # Blue 600
-            "success": "#10b981",     # Emerald 500
-            "warning": "#f59e0b",     # Amber 500
-            "error": "#ef4444",       # Red 500
-            "text": "#f8fafc",        # Slate 50
-            "text_secondary": "#94a3b8", # Slate 400
-            "border": "#334155"       # Slate 700
+            "bg": "#1e2228",             # Classic dark IDE background
+            "surface": "#252b35",        # Slightly elevated surface
+            "surface2": "#2e3440",       # Card / input background (Nord-inspired)
+            "primary": "#5b8dd9",        # Muted steel blue
+            "primary_hover": "#4a76c0",  # Slightly darker steel blue
+            "success": "#5cb85c",        # Classic bootstrap green
+            "warning": "#d9a64a",        # Muted amber
+            "error": "#c0392b",          # Classic dark red
+            "text": "#d8dee9",           # Soft off-white (easy on the eyes)
+            "text_secondary": "#636d7e", # Classic muted grey
+            "border": "#3b4252"          # Subtle slate border
         }
         
         # Main window configuration
         self.root = ctk.CTk()
-        self.root.title("Cable Marker AI Detection")
+        self.root.title("cable marker")
         self.root.geometry("1400x850")
         self.root.minsize(1280, 720)
         self.root.configure(fg_color=self.colors["bg"])
@@ -91,6 +92,7 @@ class CableMarkerApp:
         
         # Parallel Inference Performance (Optimized for Cloud Latency)
         import concurrent.futures
+        # We store executor so we can cleanly shut it down when stopping streams
         self.inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
         self.inference_counter = 0      # IDs for outgoing requests
         self.completed_inference_id = -1 # ID of the latest processed result
@@ -125,296 +127,343 @@ class CableMarkerApp:
 
         
     def create_header(self):
-        """Create simple, professional header"""
-        header = ctk.CTkFrame(self.root, height=60, fg_color=self.colors["bg"], corner_radius=0)
+        """Create sleek, premium header bar"""
+        header = ctk.CTkFrame(
+            self.root,
+            height=56,
+            fg_color=self.colors["surface"],
+            corner_radius=0
+        )
         header.grid(row=0, column=0, columnspan=3, sticky="ew")
         header.grid_propagate(False)
-        
-        # Border bottom
-        ctk.CTkFrame(header, height=1, fg_color=self.colors["border"]).pack(side="bottom", fill="x")
-        
-        # Title Area
-        title_frame = ctk.CTkFrame(header, fg_color="transparent")
-        title_frame.pack(side="left", padx=20)
-        
+        header.grid_columnconfigure(1, weight=1)
+
+        # Accent line at the very bottom
+        ctk.CTkFrame(
+            header, height=1, fg_color=self.colors["primary"], corner_radius=0
+        ).place(relx=0, rely=1.0, relwidth=1.0, anchor="sw")
+
+        # Left: Icon + App Name
+        left = ctk.CTkFrame(header, fg_color="transparent")
+        left.grid(row=0, column=0, sticky="w", padx=18, pady=10)
+
         ctk.CTkLabel(
-            title_frame,
-            text="⚡ Cable Marker AI",
-            font=ctk.CTkFont(size=18, weight="bold"),
+            left,
+            text="▨",
+            font=ctk.CTkFont(size=20, weight="bold"),
+            text_color=self.colors["primary"]
+        ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkLabel(
+            left,
+            text="cable marker",
+            font=ctk.CTkFont(size=15, weight="bold"),
             text_color=self.colors["text"]
         ).pack(side="left")
-        
-        # Status Badge
+
+        ctk.CTkLabel(
+            left,
+            text="  AI Powered",
+            font=ctk.CTkFont(size=11),
+            text_color=self.colors["text_secondary"]
+        ).pack(side="left")
+
+        # Right: Status pill
         self.header_status = ctk.CTkButton(
             header,
             text="● System Ready",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            fg_color=self.colors["surface"],
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color=self.colors["bg"],
             text_color=self.colors["success"],
             hover=False,
-            height=28,
-            corner_radius=14
+            height=26,
+            corner_radius=13,
+            border_width=1,
+            border_color=self.colors["border"]
         )
-        self.header_status.pack(side="right", padx=20)
+        self.header_status.grid(row=0, column=2, sticky="e", padx=18)
         
     def create_sidebar(self):
-        """Create controls sidebar (Left Panel)"""
+        """Create controls sidebar (Left Panel) — Premium Redesign"""
         sidebar = ctk.CTkFrame(
             self.root,
-            width=280,
+            width=260,
             fg_color=self.colors["surface"],
             corner_radius=0
         )
         sidebar.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
         sidebar.grid_propagate(False)
-        
+
+        # Subtle right border
+        ctk.CTkFrame(
+            sidebar, width=1, fg_color=self.colors["border"], corner_radius=0
+        ).place(relx=1.0, rely=0, relheight=1.0, anchor="ne")
+
         # Scrollable content
         scroll = ctk.CTkScrollableFrame(
             sidebar,
             fg_color="transparent",
-            width=260
+            scrollbar_button_color=self.colors["border"],
+            scrollbar_button_hover_color=self.colors["primary"]
         )
-        scroll.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Helper for Section Headers
-        def add_section(text):
-            f = ctk.CTkFrame(scroll, fg_color="transparent", height=30)
-            f.pack(fill="x", pady=(10, 5))
+        scroll.pack(fill="both", expand=True, padx=0, pady=0)
+
+        def section_label(text):
+            lf = ctk.CTkFrame(scroll, fg_color="transparent")
+            lf.pack(fill="x", padx=16, pady=(16, 6))
+            ctk.CTkFrame(lf, height=1, fg_color=self.colors["border"]).pack(fill="x", pady=(0, 6))
             ctk.CTkLabel(
-                f, text=text, 
-                font=ctk.CTkFont(size=11, weight="bold"), 
-                text_color=self.colors["primary"],
+                lf,
+                text=text,
+                font=ctk.CTkFont(size=10, weight="bold"),
+                text_color=self.colors["text_secondary"],
                 anchor="w"
             ).pack(fill="x")
 
-        # --- Input Source ---
-        add_section("INPUT SOURCE")
-        
+        def icon_btn(parent, icon, label, command, color=None, hover=None, state="normal"):
+            c = color or self.colors["surface2"]
+            h = hover or self.colors["primary"]
+            f = ctk.CTkFrame(parent, fg_color="transparent")
+            f.pack(fill="x", padx=16, pady=3)
+            btn = ctk.CTkButton(
+                f,
+                text=f"{icon}  {label}",
+                fg_color=c,
+                hover_color=h,
+                text_color=self.colors["text"],
+                font=ctk.CTkFont(size=12),
+                command=command,
+                height=36,
+                corner_radius=8,
+                anchor="w",
+                state=state
+            )
+            btn.pack(fill="x")
+            return btn
+
+        # ── INPUT SOURCE ──────────────────────────
+        section_label("INPUT SOURCE")
+
+        cam_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+        cam_frame.pack(fill="x", padx=16, pady=3)
         self.camera_var = ctk.StringVar(value="Select Camera")
         self.camera_dropdown = ctk.CTkComboBox(
-            scroll,
+            cam_frame,
             values=self.get_available_cameras(),
             variable=self.camera_var,
             command=self.on_camera_selected,
-            height=32,
-            fg_color=self.colors["bg"],
-            dropdown_fg_color=self.colors["surface"],
-            border_color=self.colors["border"]
+            height=36,
+            fg_color=self.colors["surface2"],
+            dropdown_fg_color=self.colors["surface2"],
+            border_color=self.colors["border"],
+            button_color=self.colors["primary"],
+            button_hover_color=self.colors["primary_hover"],
+            corner_radius=8
         )
-        self.camera_dropdown.pack(fill="x", pady=(0, 8))
-        
-        self.camera_start_btn = ctk.CTkButton(
-            scroll, text="▶ Start Stream", command=self.start_camera,
-            height=32, fg_color=self.colors["success"], hover_color="#059669",
-            state="disabled"
+        self.camera_dropdown.pack(fill="x")
+
+        self.camera_start_btn = icon_btn(
+            scroll, "▶", "Start Stream", self.start_camera,
+            color=self.colors["success"], hover="#00b856", state="disabled"
         )
-        self.camera_start_btn.pack(fill="x", pady=(0, 8))
-        
-        self.camera_stop_btn = ctk.CTkButton(
-            scroll, text="⏹ Stop Stream", command=self.stop_camera,
-            height=32, fg_color=self.colors["error"], hover_color="#b91c1c",
-            state="disabled"
+        self.camera_stop_btn = icon_btn(
+            scroll, "⏹", "Stop Stream", self.stop_camera,
+            color=self.colors["error"], hover="#cc0033", state="disabled"
         )
-        self.camera_stop_btn.pack(fill="x", pady=(0, 8))
-        
-        ctk.CTkButton(
-            scroll, text="📂 Load Image", command=self.load_image,
-            height=32, fg_color=self.colors["bg"], hover_color=self.colors["primary"],
-            border_width=1, border_color=self.colors["border"]
-        ).pack(fill="x", pady=(0, 5))
-        
-        # --- Filters ---
-        add_section("FILTERS")
-        
+        icon_btn(scroll, "📂", "Load File", self.load_image)
+
+        # ── FILTERS ───────────────────────────────
+        section_label("COLOR FILTER")
+
+        filter_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+        filter_frame.pack(fill="x", padx=16, pady=3)
         self.color_filter_var = ctk.StringVar(value="All Colors")
         self.color_filter_dropdown = ctk.CTkComboBox(
-            scroll,
+            filter_frame,
             values=["All Colors", "White", "Yellow", "Blue", "Pink", "Green"],
             variable=self.color_filter_var,
             command=self.on_color_filter_changed,
-            height=32,
-            fg_color=self.colors["bg"],
-            dropdown_fg_color=self.colors["surface"],
-            border_color=self.colors["border"]
+            height=36,
+            fg_color=self.colors["surface2"],
+            dropdown_fg_color=self.colors["surface2"],
+            border_color=self.colors["border"],
+            button_color=self.colors["primary"],
+            button_hover_color=self.colors["primary_hover"],
+            corner_radius=8
         )
-        self.color_filter_dropdown.pack(fill="x", pady=(0, 5))
-        
-        # --- ROI ---
-        add_section("REGION OF INTEREST")
-        
+        self.color_filter_dropdown.pack(fill="x")
+
+        # ── REGION OF INTEREST ────────────────────
+        section_label("REGION OF INTEREST")
+
         roi_row = ctk.CTkFrame(scroll, fg_color="transparent")
-        roi_row.pack(fill="x", pady=(0, 5))
-        
+        roi_row.pack(fill="x", padx=16, pady=3)
+        roi_row.grid_columnconfigure(0, weight=1)
+        roi_row.grid_columnconfigure(1, weight=1)
+
         self.select_roi_btn = ctk.CTkButton(
-            roi_row, text="Select Area", command=self.toggle_roi_selection,
-            height=28, fg_color=self.colors["bg"], border_width=1, 
-            border_color=self.colors["border"], width=110
+            roi_row, text="⛶ Select",
+            fg_color=self.colors["surface2"],
+            hover_color=self.colors["primary"],
+            text_color=self.colors["text"],
+            height=34, corner_radius=8, font=ctk.CTkFont(size=12),
+            command=self.toggle_roi_selection
         )
-        self.select_roi_btn.pack(side="left", padx=(0, 5))
-        
+        self.select_roi_btn.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+
         self.reset_roi_btn = ctk.CTkButton(
-            roi_row, text="Reset", command=self.reset_roi,
-            height=28, fg_color=self.colors["bg"], border_width=1, 
-            border_color=self.colors["border"], width=110, state="disabled"
+            roi_row, text="↺ Reset",
+            fg_color=self.colors["surface2"],
+            hover_color=self.colors["warning"],
+            text_color=self.colors["text"],
+            height=34, corner_radius=8, font=ctk.CTkFont(size=12),
+            command=self.reset_roi, state="disabled"
         )
-        self.reset_roi_btn.pack(side="right")
-        
-        # --- Actions ---
-        add_section("ACTIONS")
-        
-        self.reset_btn = ctk.CTkButton(
-            scroll, text="Reset View", command=self.reset_view,
-            height=32, fg_color=self.colors["bg"], border_width=1, 
-            border_color=self.colors["border"], state="disabled"
+        self.reset_roi_btn.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+
+        # ── ACTIONS ───────────────────────────────
+        section_label("ACTIONS")
+        self.reset_btn = icon_btn(
+            scroll, "↺", "Reset View", self.reset_view, state="disabled"
         )
-        self.reset_btn.pack(fill="x", pady=(0, 5))
-        
-        # --- GPIO ---
+
+        # ── GPIO ──────────────────────────────────
         if IS_RASPBERRY_PI or self.gpio_controller.gpio_available:
-            add_section("HARDWARE CONTROL")
-            
+            section_label("HARDWARE")
             gpio_status = self.gpio_controller.get_status()
-            status_text = "ready" if gpio_status["initialized"] else "simulated"
-            
+            status_text = "GPIO Ready" if gpio_status["initialized"] else "GPIO Simulated"
+            sc = self.colors["success"] if gpio_status["initialized"] else self.colors["warning"]
+
             self.gpio_status_label = ctk.CTkLabel(
-                scroll, text=f"Status: {status_text}",
-                font=ctk.CTkFont(size=11), text_color=self.colors["text_secondary"], anchor="w"
+                scroll, text=f"● {status_text}",
+                font=ctk.CTkFont(size=11),
+                text_color=sc, anchor="w"
             )
-            self.gpio_status_label.pack(fill="x", pady=(0, 5))
-            
-            self.gpio_test_btn = ctk.CTkButton(
-                scroll, text="Test Output Signals", command=self.test_gpio,
-                height=32, fg_color=self.colors["primary"], hover_color=self.colors["primary_hover"]
+            self.gpio_status_label.pack(fill="x", padx=20, pady=(0, 4))
+
+            self.gpio_test_btn = icon_btn(
+                scroll, "⚡", "Test Output Signals",
+                self.test_gpio,
+                color=self.colors["primary"],
+                hover=self.colors["primary_hover"]
             )
-            self.gpio_test_btn.pack(fill="x", pady=(0, 5))
         
     def create_main_display(self):
-        """Create enhanced main image display area"""
+        """Create premium main image display area"""
         main = ctk.CTkFrame(
-            self.root, 
+            self.root,
             fg_color=self.colors["bg"],
             corner_radius=0
         )
         main.grid(row=1, column=1, sticky="nsew", padx=0, pady=0)
         main.grid_rowconfigure(0, weight=1)
         main.grid_columnconfigure(0, weight=1)
-        
-        # Canvas frame with border
+
+        # Canvas container with subtle inner border
         self.canvas_frame = ctk.CTkFrame(
             main,
-            fg_color=self.colors["surface"],
+            fg_color=self.colors["bg"],
             corner_radius=0,
             border_width=0
         )
-        self.canvas_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
-        
-        # Placeholder
-        placeholder_frame = ctk.CTkFrame(self.canvas_frame, fg_color="transparent")
-        placeholder_frame.place(relx=0.5, rely=0.5, anchor="center")
-        
+        self.canvas_frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+
+        # Placeholder group — centred
+        ph_container = ctk.CTkFrame(self.canvas_frame, fg_color="transparent")
+        ph_container.place(relx=0.5, rely=0.5, anchor="center")
+
         self.placeholder_icon = ctk.CTkLabel(
-            placeholder_frame,
+            ph_container,
             text="📷",
-            font=ctk.CTkFont(size=80),
+            font=ctk.CTkFont(size=72),
             text_color=self.colors["border"]
         )
-        self.placeholder_icon.pack(pady=(0, 20))
-        
+        self.placeholder_icon.pack(pady=(0, 16))
+
         self.placeholder = ctk.CTkLabel(
-            placeholder_frame,
-            text="Ready to Scan",
-            font=ctk.CTkFont(size=24, weight="bold"),
+            ph_container,
+            text="No Source Active",
+            font=ctk.CTkFont(size=22, weight="bold"),
             text_color=self.colors["text_secondary"]
         )
-        self.placeholder.pack(pady=(0, 10))
-        
-        sub_placeholder = ctk.CTkLabel(
-            placeholder_frame,
-            text="Load an image or start the camera feed to begin",
-            font=ctk.CTkFont(size=14),
-            text_color=self.colors["text_secondary"]
-        )
-        sub_placeholder.pack()
-        
+        self.placeholder.pack(pady=(0, 6))
+
+        ctk.CTkLabel(
+            ph_container,
+            text="Load a file or start a camera stream to begin detection",
+            font=ctk.CTkFont(size=12),
+            text_color=self.colors["border"]
+        ).pack()
+
         self.image_label = None
         
     def create_right_panel(self):
-        """Create Right Insights Panel with Modern Cards"""
+        """Create the Right Insights Panel — Premium Redesign"""
         right_panel = ctk.CTkFrame(
             self.root,
-            width=320,
+            width=300,
             fg_color=self.colors["surface"],
             corner_radius=0
         )
         right_panel.grid(row=1, column=2, sticky="nsew", padx=0, pady=0)
         right_panel.grid_propagate(False)
-        
-        # Title
-        title_frame = ctk.CTkFrame(right_panel, fg_color="transparent", height=50)
-        title_frame.pack(fill="x", padx=20, pady=(20, 10))
-        
-        ctk.CTkLabel(
-            title_frame,
-            text="LIVE INSIGHTS",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=self.colors["text_secondary"],
-            anchor="w"
-        ).pack(side="left")
 
-        # Total Count Big Number
-        stats_frame = ctk.CTkFrame(right_panel, fg_color=self.colors["bg"], corner_radius=10)
-        stats_frame.pack(fill="x", padx=20, pady=(0, 20))
-        
+        # Left border accent
+        ctk.CTkFrame(
+            right_panel, width=1, fg_color=self.colors["border"]
+        ).place(relx=0, rely=0, relheight=1.0, anchor="nw")
+
+        # ── Big counter card
+        counter_card = ctk.CTkFrame(
+            right_panel,
+            fg_color=self.colors["surface2"],
+            corner_radius=12
+        )
+        counter_card.pack(fill="x", padx=16, pady=(20, 12))
+
+        ctk.CTkLabel(
+            counter_card,
+            text="DETECTED",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=self.colors["text_secondary"]
+        ).pack(pady=(14, 0))
+
         self.markers_count = ctk.CTkLabel(
-            stats_frame,
+            counter_card,
             text="0",
-            font=ctk.CTkFont(size=42, weight="bold"),
+            font=ctk.CTkFont(size=52, weight="bold"),
             text_color=self.colors["primary"]
         )
-        self.markers_count.pack(pady=(15, 0))
-        
+        self.markers_count.pack(pady=(0, 2))
+
         ctk.CTkLabel(
-            stats_frame,
-            text="Markers Detected",
-            font=ctk.CTkFont(size=12),
+            counter_card,
+            text="cable markers",
+            font=ctk.CTkFont(size=11),
             text_color=self.colors["text_secondary"]
-        ).pack(pady=(0, 15))
+        ).pack(pady=(0, 14))
 
-        # Divider
-        ctk.CTkFrame(right_panel, height=1, fg_color=self.colors["border"]).pack(fill="x", padx=20, pady=(0, 20))
-
-        # Scrollable "Cards" List
+        # ── Section label
+        lf = ctk.CTkFrame(right_panel, fg_color="transparent")
+        lf.pack(fill="x", padx=16, pady=(4, 6))
+        ctk.CTkFrame(lf, height=1, fg_color=self.colors["border"]).pack(fill="x", pady=(0, 6))
         ctk.CTkLabel(
-            right_panel,
-            text="RECENT DETECTIONS",
-            font=ctk.CTkFont(size=11, weight="bold"),
-            text_color=self.colors["text_secondary"],
-            anchor="w"
-        ).pack(fill="x", padx=20, pady=(0, 10))
+            lf, text="DETECTIONS",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=self.colors["text_secondary"], anchor="w"
+        ).pack(fill="x")
 
+        # ── Scrollable card list
         self.results_scroll = ctk.CTkScrollableFrame(
             right_panel,
             fg_color="transparent",
-            height=400 # approximate
+            scrollbar_button_color=self.colors["border"],
+            scrollbar_button_hover_color=self.colors["primary"]
         )
-        self.results_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 20))
-        
-        # Export Button at Bottom
-        self.save_btn = ctk.CTkButton(
-            right_panel,
-            text="⬇ Export Data",
-            command=self.save_results,
-            height=40,
-            fg_color="transparent",
-            border_width=1,
-            border_color=self.colors["primary"],
-            text_color=self.colors["primary"],
-            hover_color=self.colors["bg"],
-            font=ctk.CTkFont(weight="bold"),
-            state="disabled",
-            anchor="center"
-        )
-        self.save_btn.pack(fill="x", padx=20, pady=20, side="bottom")
+        self.results_scroll.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+
+        # Export button removed per user request
+        self.save_btn = None  # kept as stub to avoid AttributeErrors
 
     # Footer removed
 
@@ -593,7 +642,8 @@ class CableMarkerApp:
         
         self.gpio_controller.process_detected_colors(self.detected_markers)
         
-        self.save_btn.configure(state="normal")
+        if self.save_btn:  # Export button may be disabled
+            self.save_btn.configure(state="normal")
         
         marker_count = len(self.detected_markers)
         marker_count = len(self.detected_markers)
@@ -1122,6 +1172,12 @@ class CableMarkerApp:
         if not file_path:
             return  # User cancelled
 
+        if self.camera_active:
+            self.stop_camera()
+            # Wait for thread to actually die
+            if self.capture_thread and self.capture_thread.is_alive():
+                self.capture_thread.join(timeout=1.0)
+                
         cap = cv2.VideoCapture(file_path)
         if not cap.isOpened():
             messagebox.showerror("Error", f"Failed to open video:\n{file_path}")
@@ -1148,6 +1204,11 @@ class CableMarkerApp:
 
         self.latest_detections_lock = threading.Lock()
         self.is_inferencing = False
+        
+        # Ensure we have a fresh thread pool
+        import concurrent.futures
+        if not hasattr(self, 'inference_executor'):
+            self.inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
 
         def video_loop():
             nonlocal cap
@@ -1259,6 +1320,7 @@ class CableMarkerApp:
 
             cap.release()
             self.camera = None
+            self.camera_active = False # Ensure flag is off when thread exits
             print("🛑 Video file playback stopped")
 
         self.capture_thread = threading.Thread(target=video_loop, daemon=True)
@@ -1270,13 +1332,37 @@ class CableMarkerApp:
         print("Stopping camera/simulation...")
         self.camera_active = False
         self.simulation_running = False
-        # self.show_detection_pause = False <-- Removed
+
+        # Properly wait for the capture thread to terminate
+        if self.capture_thread and self.capture_thread.is_alive():
+            print("⏳ Waiting for previous video loop to cleanly terminate...")
+            self.capture_thread.join(timeout=2.0)
+            print("✅ Thread terminated.")
+            self.capture_thread = None
+
+        # Properly shutdown old pool to prevent pending inferences of the old video from bleeding into the new one
+        if hasattr(self, 'inference_executor'):
+            print("⏳ Shutting down inference pool...")
+            # False -> don't wait for completion of pending threads, cancel them immediately
+            self.inference_executor.shutdown(wait=False, cancel_futures=True)
+            import concurrent.futures
+            # Recreate a fresh thread pool executor
+            self.inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
+
+        # Reset counters so old thread IDs don't overrule new thread IDs
+        with self.inference_lock:
+            self.inference_counter = 0
+            self.completed_inference_id = -1
+            self.active_inference_count = 0
 
         # Stop WebRTC stream (legacy cleanup if needed)
         # self.detector.stop_webrtc_stream()
         
         # Camera release is handled in the thread loop when self.camera_active becomes False
         # But we can force release here if we want to be safe, though usually safer to let thread exit
+        if self.camera is not None and getattr(self.camera, 'isOpened', lambda: False)():
+             self.camera.release()
+             self.camera = None
         
         self.camera_start_btn.configure(state="normal")
         self.camera_stop_btn.configure(state="disabled")
@@ -1330,9 +1416,7 @@ class CableMarkerApp:
         def on_closing():
             if self.camera_active:
                 self.stop_camera()
-            # Stop WebRTC stream if active
-            if self.detector.session_active:
-                self.detector.stop_webrtc_stream()
+            # Clean up GPIO
             self.gpio_controller.cleanup()
             self.root.destroy()
         
