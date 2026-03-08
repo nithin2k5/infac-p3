@@ -6,7 +6,7 @@ A real-time cable marker detection system using **local YOLO inference** — no 
 
 ## ✨ Features
 
-- ✅ **Credit-Free** — Runs 100% locally using `weights-3.pt`
+- ✅ **Credit-Free** — Runs 100% locally using `weights-5.pt`
 - ✅ Real-time detection from camera or video file
 - ✅ Color filtering (White, Yellow, Blue, Pink, Green)
 - ✅ Region of Interest (ROI) selection
@@ -212,7 +212,7 @@ infac-p3/
 ├── app.py                  # Main application & UI
 ├── roboflow_detector.py    # Local YOLO inference engine
 ├── gpio_controller.py      # Raspberry Pi GPIO control
-├── weights-3.pt            # YOLO model weights
+├── weights-5.pt            # YOLO model weights
 └── detections/             # Auto-saved detection images
 ```
 

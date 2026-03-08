@@ -17,7 +17,7 @@ except ImportError:
 
 class RoboflowDetector:
     """
-    Cable marker detector using local YOLO model (weights-3.pt).
+    Cable marker detector using local YOLO model (weights-5.pt).
     Replaces the old Roboflow API.
     """
     
@@ -32,7 +32,7 @@ class RoboflowDetector:
         self._initialized = False
         
         # Load local YOLO model
-        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'weights-3.pt')
+        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'weights-5.pt')
         if YOLO_AVAILABLE:
             if os.path.exists(model_path):
                 print(f"🔄 Initializing local YOLO model from {model_path}...")
