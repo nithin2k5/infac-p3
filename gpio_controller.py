@@ -58,14 +58,14 @@ class GPIOController:
         
         # Color to pin mapping
         self.color_pin_map = {
-            "Yellow": [pin1],
-            "Blue": [pin2],
-            "Green": [pin1, pin2],
-            "White": [pin3],
-            "Pink": [pin1, pin3],
-            "Red": [pin2, pin3],
-            "Grey": [pin1, pin2, pin3],
-            "Gray": [pin1, pin2, pin3]  # Alternative spelling
+            "yellow": [pin1],
+            "blue": [pin2],
+            "green": [pin1, pin2],
+            "white": [pin3],
+            "pink": [pin1, pin3],
+            "red": [pin2, pin3],
+            "grey": [pin1, pin2, pin3],
+            "gray": [pin1, pin2, pin3]  # Alternative spelling
         }
         
         if self.gpio_available:

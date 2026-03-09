@@ -51,8 +51,8 @@ class CableMarkerApp:
         # Main window configuration
         self.root = ctk.CTk()
         self.root.title("cable marker")
-        self.root.geometry("1400x850")
-        self.root.minsize(1280, 720)
+        self.root.geometry("480x320" if IS_RASPBERRY_PI else "800x480")
+        self.root.minsize(480, 320)
         self.root.configure(fg_color=self.colors["bg"])
         
         # Initialize detector
@@ -111,13 +111,13 @@ class CableMarkerApp:
     def setup_ui(self):
         """Initialize the modern Dashboard UI"""
         # Configure grid layout (3 columns: Sidebar, Main, Right Panel)
-        self.root.grid_columnconfigure(0, weight=0, minsize=280)  # Left Sidebar (Controls)
+        self.root.grid_columnconfigure(0, weight=0, minsize=140)  # Left Sidebar (Controls)
         self.root.grid_columnconfigure(1, weight=1)               # Center (Video)
-        self.root.grid_columnconfigure(2, weight=0, minsize=320)  # Right Panel (Insights)
+        self.root.grid_columnconfigure(2, weight=0, minsize=140)  # Right Panel (Insights)
         
-        self.root.grid_rowconfigure(0, weight=0, minsize=70)      # Header
+        self.root.grid_rowconfigure(0, weight=0, minsize=30)      # Header
         self.root.grid_rowconfigure(1, weight=1)                  # Main Content
-        self.root.grid_rowconfigure(2, weight=0, minsize=35)      # Footer
+        self.root.grid_rowconfigure(2, weight=0, minsize=10)      # Footer
         
         self.create_header()
         self.create_sidebar()        # Left: Controls
@@ -130,7 +130,7 @@ class CableMarkerApp:
         """Create sleek, premium header bar"""
         header = ctk.CTkFrame(
             self.root,
-            height=56,
+            height=30,
             fg_color=self.colors["surface"],
             corner_radius=0
         )
@@ -145,43 +145,23 @@ class CableMarkerApp:
 
         # Left: Icon + App Name
         left = ctk.CTkFrame(header, fg_color="transparent")
-        left.grid(row=0, column=0, sticky="w", padx=18, pady=10)
+        left.grid(row=0, column=0, sticky="w", padx=8, pady=4)
 
         ctk.CTkLabel(
             left,
-            text="▨",
-            font=ctk.CTkFont(size=20, weight="bold"),
+            text="▨ cable marker",
+            font=ctk.CTkFont(size=12, weight="bold"),
             text_color=self.colors["primary"]
-        ).pack(side="left", padx=(0, 8))
-
-        ctk.CTkLabel(
-            left,
-            text="cable marker",
-            font=ctk.CTkFont(size=15, weight="bold"),
-            text_color=self.colors["text"]
-        ).pack(side="left")
-
-        ctk.CTkLabel(
-            left,
-            text="  AI Powered",
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors["text_secondary"]
         ).pack(side="left")
 
         # Right: Status pill
-        self.header_status = ctk.CTkButton(
+        self.header_status = ctk.CTkLabel(
             header,
             text="● System Ready",
-            font=ctk.CTkFont(size=11, weight="bold"),
-            fg_color=self.colors["bg"],
-            text_color=self.colors["success"],
-            hover=False,
-            height=26,
-            corner_radius=13,
-            border_width=1,
-            border_color=self.colors["border"]
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=self.colors["success"]
         )
-        self.header_status.grid(row=0, column=2, sticky="e", padx=18)
+        self.header_status.grid(row=0, column=2, sticky="e", padx=8)
         
     def create_sidebar(self):
         """Create controls sidebar (Left Panel) — Premium Redesign"""
@@ -210,12 +190,12 @@ class CableMarkerApp:
 
         def section_label(text):
             lf = ctk.CTkFrame(scroll, fg_color="transparent")
-            lf.pack(fill="x", padx=16, pady=(16, 6))
-            ctk.CTkFrame(lf, height=1, fg_color=self.colors["border"]).pack(fill="x", pady=(0, 6))
+            lf.pack(fill="x", padx=4, pady=(6, 2))
+            ctk.CTkFrame(lf, height=1, fg_color=self.colors["border"]).pack(fill="x", pady=(0, 2))
             ctk.CTkLabel(
                 lf,
                 text=text,
-                font=ctk.CTkFont(size=10, weight="bold"),
+                font=ctk.CTkFont(size=9, weight="bold"),
                 text_color=self.colors["text_secondary"],
                 anchor="w"
             ).pack(fill="x")
@@ -224,17 +204,17 @@ class CableMarkerApp:
             c = color or self.colors["surface2"]
             h = hover or self.colors["primary"]
             f = ctk.CTkFrame(parent, fg_color="transparent")
-            f.pack(fill="x", padx=16, pady=3)
+            f.pack(fill="x", padx=4, pady=2)
             btn = ctk.CTkButton(
                 f,
                 text=f"{icon}  {label}",
                 fg_color=c,
                 hover_color=h,
                 text_color=self.colors["text"],
-                font=ctk.CTkFont(size=12),
+                font=ctk.CTkFont(size=10),
                 command=command,
-                height=36,
-                corner_radius=8,
+                height=24,
+                corner_radius=4,
                 anchor="w",
                 state=state
             )
@@ -245,20 +225,22 @@ class CableMarkerApp:
         section_label("INPUT SOURCE")
 
         cam_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        cam_frame.pack(fill="x", padx=16, pady=3)
+        cam_frame.pack(fill="x", padx=4, pady=2)
         self.camera_var = ctk.StringVar(value="Select Camera")
         self.camera_dropdown = ctk.CTkComboBox(
             cam_frame,
             values=self.get_available_cameras(),
             variable=self.camera_var,
             command=self.on_camera_selected,
-            height=36,
+            height=24,
+            font=ctk.CTkFont(size=10),
+            dropdown_font=ctk.CTkFont(size=10),
             fg_color=self.colors["surface2"],
             dropdown_fg_color=self.colors["surface2"],
             border_color=self.colors["border"],
             button_color=self.colors["primary"],
             button_hover_color=self.colors["primary_hover"],
-            corner_radius=8
+            corner_radius=4
         )
         self.camera_dropdown.pack(fill="x")
 
@@ -276,20 +258,22 @@ class CableMarkerApp:
         section_label("COLOR FILTER")
 
         filter_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        filter_frame.pack(fill="x", padx=16, pady=3)
+        filter_frame.pack(fill="x", padx=4, pady=2)
         self.color_filter_var = ctk.StringVar(value="All Colors")
         self.color_filter_dropdown = ctk.CTkComboBox(
             filter_frame,
             values=["All Colors", "White", "Yellow", "Blue", "Pink", "Green"],
             variable=self.color_filter_var,
             command=self.on_color_filter_changed,
-            height=36,
+            height=24,
+            font=ctk.CTkFont(size=10),
+            dropdown_font=ctk.CTkFont(size=10),
             fg_color=self.colors["surface2"],
             dropdown_fg_color=self.colors["surface2"],
             border_color=self.colors["border"],
             button_color=self.colors["primary"],
             button_hover_color=self.colors["primary_hover"],
-            corner_radius=8
+            corner_radius=4
         )
         self.color_filter_dropdown.pack(fill="x")
 
@@ -297,7 +281,7 @@ class CableMarkerApp:
         section_label("REGION OF INTEREST")
 
         roi_row = ctk.CTkFrame(scroll, fg_color="transparent")
-        roi_row.pack(fill="x", padx=16, pady=3)
+        roi_row.pack(fill="x", padx=4, pady=2)
         roi_row.grid_columnconfigure(0, weight=1)
         roi_row.grid_columnconfigure(1, weight=1)
 
@@ -306,20 +290,20 @@ class CableMarkerApp:
             fg_color=self.colors["surface2"],
             hover_color=self.colors["primary"],
             text_color=self.colors["text"],
-            height=34, corner_radius=8, font=ctk.CTkFont(size=12),
+            height=24, corner_radius=4, font=ctk.CTkFont(size=10),
             command=self.toggle_roi_selection
         )
-        self.select_roi_btn.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        self.select_roi_btn.grid(row=0, column=0, sticky="ew", padx=(0, 2))
 
         self.reset_roi_btn = ctk.CTkButton(
             roi_row, text="↺ Reset",
             fg_color=self.colors["surface2"],
             hover_color=self.colors["warning"],
             text_color=self.colors["text"],
-            height=34, corner_radius=8, font=ctk.CTkFont(size=12),
+            height=24, corner_radius=4, font=ctk.CTkFont(size=10),
             command=self.reset_roi, state="disabled"
         )
-        self.reset_roi_btn.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+        self.reset_roi_btn.grid(row=0, column=1, sticky="ew", padx=(2, 0))
 
         # ── ACTIONS ───────────────────────────────
         section_label("ACTIONS")
@@ -336,10 +320,10 @@ class CableMarkerApp:
 
             self.gpio_status_label = ctk.CTkLabel(
                 scroll, text=f"● {status_text}",
-                font=ctk.CTkFont(size=11),
+                font=ctk.CTkFont(size=9),
                 text_color=sc, anchor="w"
             )
-            self.gpio_status_label.pack(fill="x", padx=20, pady=(0, 4))
+            self.gpio_status_label.pack(fill="x", padx=4, pady=(0, 2))
 
             self.gpio_test_btn = icon_btn(
                 scroll, "⚡", "Test Output Signals",
@@ -401,7 +385,7 @@ class CableMarkerApp:
         """Create the Right Insights Panel — Premium Redesign"""
         right_panel = ctk.CTkFrame(
             self.root,
-            width=300,
+            width=120,
             fg_color=self.colors["surface"],
             corner_radius=0
         )
@@ -417,21 +401,21 @@ class CableMarkerApp:
         counter_card = ctk.CTkFrame(
             right_panel,
             fg_color=self.colors["surface2"],
-            corner_radius=12
+            corner_radius=8
         )
-        counter_card.pack(fill="x", padx=16, pady=(20, 12))
+        counter_card.pack(fill="x", padx=4, pady=(10, 6))
 
         ctk.CTkLabel(
             counter_card,
             text="DETECTED",
-            font=ctk.CTkFont(size=10, weight="bold"),
+            font=ctk.CTkFont(size=9, weight="bold"),
             text_color=self.colors["text_secondary"]
-        ).pack(pady=(14, 0))
+        ).pack(pady=(6, 0))
 
         self.markers_count = ctk.CTkLabel(
             counter_card,
             text="0",
-            font=ctk.CTkFont(size=52, weight="bold"),
+            font=ctk.CTkFont(size=36, weight="bold"),
             text_color=self.colors["primary"]
         )
         self.markers_count.pack(pady=(0, 2))
@@ -439,17 +423,17 @@ class CableMarkerApp:
         ctk.CTkLabel(
             counter_card,
             text="cable markers",
-            font=ctk.CTkFont(size=11),
+            font=ctk.CTkFont(size=9),
             text_color=self.colors["text_secondary"]
-        ).pack(pady=(0, 14))
+        ).pack(pady=(0, 6))
 
         # ── Section label
         lf = ctk.CTkFrame(right_panel, fg_color="transparent")
-        lf.pack(fill="x", padx=16, pady=(4, 6))
-        ctk.CTkFrame(lf, height=1, fg_color=self.colors["border"]).pack(fill="x", pady=(0, 6))
+        lf.pack(fill="x", padx=4, pady=(2, 4))
+        ctk.CTkFrame(lf, height=1, fg_color=self.colors["border"]).pack(fill="x", pady=(0, 2))
         ctk.CTkLabel(
             lf, text="DETECTIONS",
-            font=ctk.CTkFont(size=10, weight="bold"),
+            font=ctk.CTkFont(size=9, weight="bold"),
             text_color=self.colors["text_secondary"], anchor="w"
         ).pack(fill="x")
 
@@ -460,7 +444,7 @@ class CableMarkerApp:
             scrollbar_button_color=self.colors["border"],
             scrollbar_button_hover_color=self.colors["primary"]
         )
-        self.results_scroll.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        self.results_scroll.pack(fill="both", expand=True, padx=4, pady=(0, 4))
 
         # Export button removed per user request
         self.save_btn = None  # kept as stub to avoid AttributeErrors
@@ -730,15 +714,15 @@ class CableMarkerApp:
     def _get_color_hex(self, color_name):
         """Helper to get hex code for UI indicators"""
         colors = {
-            "Yellow": "#facc15",
-            "Blue": "#3b82f6", 
-            "Green": "#22c55e",
-            "Red": "#ef4444",
-            "White": "#f8fafc",
-            "Pink": "#ec4899",
-            "Grey": "#9ca3af"
+            "yellow": "#facc15",
+            "blue": "#3b82f6", 
+            "green": "#22c55e",
+            "red": "#ef4444",
+            "white": "#f8fafc",
+            "pink": "#ec4899",
+            "grey": "#9ca3af"
         }
-        return colors.get(color_name, "#94a3b8")
+        return colors.get(str(color_name).lower(), "#94a3b8")
         
     def reset_view(self):
         """Reset to original image"""
