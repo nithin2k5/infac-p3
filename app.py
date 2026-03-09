@@ -475,9 +475,6 @@ class CableMarkerApp:
 
         # --- Video path ---
         if ext in VIDEO_EXTENSIONS:
-            if self.camera_active:
-                self.stop_camera()
-            self._pending_video_path = file_path
             self.start_video_file_mode(file_path)
             return
 
@@ -1158,9 +1155,6 @@ class CableMarkerApp:
 
         if self.camera_active:
             self.stop_camera()
-            # Wait for thread to actually die
-            if self.capture_thread and self.capture_thread.is_alive():
-                self.capture_thread.join(timeout=1.0)
                 
         cap = cv2.VideoCapture(file_path)
         if not cap.isOpened():
@@ -1318,7 +1312,7 @@ class CableMarkerApp:
         self.simulation_running = False
 
         # Properly wait for the capture thread to terminate
-        if self.capture_thread and self.capture_thread.is_alive():
+        if getattr(self, 'capture_thread', None) and self.capture_thread.is_alive():
             print("⏳ Waiting for previous video loop to cleanly terminate...")
             self.capture_thread.join(timeout=2.0)
             print("✅ Thread terminated.")
@@ -1344,7 +1338,7 @@ class CableMarkerApp:
         
         # Camera release is handled in the thread loop when self.camera_active becomes False
         # But we can force release here if we want to be safe, though usually safer to let thread exit
-        if self.camera is not None and getattr(self.camera, 'isOpened', lambda: False)():
+        if hasattr(self, 'camera') and self.camera is not None and getattr(self.camera, 'isOpened', lambda: False)():
              self.camera.release()
              self.camera = None
         
