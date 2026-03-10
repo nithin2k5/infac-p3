@@ -10,8 +10,7 @@ Pillow>=10.4.0
 customtkinter>=5.2.0
 
 # API and HTTP
-requests>=2.23.0
-roboflow>=1.2.0
+# requests and roboflow removed as they are unused by the local YOLO detector
 
 # Raspberry Pi GPIO
 # Install system package first: sudo apt-get install python3-rpi-lgpio
