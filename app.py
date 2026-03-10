@@ -51,7 +51,21 @@ class CableMarkerApp:
         # Main window configuration
         self.root = ctk.CTk()
         self.root.title("cable marker")
-        self.root.geometry("480x320" if IS_RASPBERRY_PI else "800x480")
+        
+        # Enhanced responsiveness for 3.5" layout
+        screen_w = self.root.winfo_screenwidth()
+        # Ensure it works correctly on 480x320 screens
+        self.is_small_screen = IS_RASPBERRY_PI or screen_w <= 640
+        
+        if self.is_small_screen:
+            self.root.geometry("480x320")
+            self.sidebar_width = 160
+            self.right_panel_width = 0  # Remove completely to maximize camera frame
+        else:
+            self.root.geometry("800x480")
+            self.sidebar_width = 200
+            self.right_panel_width = 120
+            
         self.root.minsize(480, 320)
         self.root.configure(fg_color=self.colors["bg"])
         
@@ -90,10 +104,10 @@ class CableMarkerApp:
         self.camera_index = 0
         self.capture_thread = None
         
-        # Parallel Inference Performance (Optimized for Cloud Latency)
+        # Parallel Inference Performance (Optimized)
         import concurrent.futures
-        # We store executor so we can cleanly shut it down when stopping streams
-        self.inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
+        # Limit max workers to 2 to prevent CPU starvation and lag on the main camera thread
+        self.inference_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self.inference_counter = 0      # IDs for outgoing requests
         self.completed_inference_id = -1 # ID of the latest processed result
         self.active_inference_count = 0  # Track current threads in flight
@@ -111,9 +125,9 @@ class CableMarkerApp:
     def setup_ui(self):
         """Initialize the modern Dashboard UI"""
         # Configure grid layout (3 columns: Sidebar, Main, Right Panel)
-        self.root.grid_columnconfigure(0, weight=0, minsize=140)  # Left Sidebar (Controls)
+        self.root.grid_columnconfigure(0, weight=0, minsize=self.sidebar_width)  # Left Sidebar (Controls)
         self.root.grid_columnconfigure(1, weight=1)               # Center (Video)
-        self.root.grid_columnconfigure(2, weight=0, minsize=140)  # Right Panel (Insights)
+        self.root.grid_columnconfigure(2, weight=0, minsize=self.right_panel_width)  # Right Panel (Insights)
         
         self.root.grid_rowconfigure(0, weight=0, minsize=30)      # Header
         self.root.grid_rowconfigure(1, weight=1)                  # Main Content
@@ -122,7 +136,8 @@ class CableMarkerApp:
         self.create_header()
         self.create_sidebar()        # Left: Controls
         self.create_main_display()   # Center: Video
-        self.create_right_panel()    # Right: Insights
+        if not self.is_small_screen:
+            self.create_right_panel()    # Right: Insights
         # self.create_footer()       # Removed footer for cleaner look, status moved to sidebar/header
 
         
@@ -167,7 +182,7 @@ class CableMarkerApp:
         """Create controls sidebar (Left Panel) — Premium Redesign"""
         sidebar = ctk.CTkFrame(
             self.root,
-            width=260,
+            width=self.sidebar_width,
             fg_color=self.colors["surface"],
             corner_radius=0
         )
@@ -385,7 +400,7 @@ class CableMarkerApp:
         """Create the Right Insights Panel — Premium Redesign"""
         right_panel = ctk.CTkFrame(
             self.root,
-            width=120,
+            width=self.right_panel_width,
             fg_color=self.colors["surface"],
             corner_radius=0
         )
@@ -401,50 +416,33 @@ class CableMarkerApp:
         counter_card = ctk.CTkFrame(
             right_panel,
             fg_color=self.colors["surface2"],
-            corner_radius=8
+            corner_radius=4
         )
-        counter_card.pack(fill="x", padx=4, pady=(10, 6))
+        
+        # Adjust paddings based on screen size
+        card_padx = 1 if self.is_small_screen else 4
+        card_pady_top = 2 if self.is_small_screen else 10
+        card_pady_bottom = 2 if self.is_small_screen else 6
+        
+        counter_card.pack(fill="x", padx=card_padx, pady=(card_pady_top, card_pady_bottom))
 
         ctk.CTkLabel(
             counter_card,
             text="DETECTED",
-            font=ctk.CTkFont(size=9, weight="bold"),
+            font=ctk.CTkFont(size=6 if self.is_small_screen else 9, weight="bold"),
             text_color=self.colors["text_secondary"]
-        ).pack(pady=(6, 0))
+        ).pack(pady=(2 if self.is_small_screen else 6, 0))
 
         self.markers_count = ctk.CTkLabel(
             counter_card,
             text="0",
-            font=ctk.CTkFont(size=36, weight="bold"),
+            font=ctk.CTkFont(size=18 if self.is_small_screen else 36, weight="bold"),
             text_color=self.colors["primary"]
         )
         self.markers_count.pack(pady=(0, 2))
 
-        ctk.CTkLabel(
-            counter_card,
-            text="cable markers",
-            font=ctk.CTkFont(size=9),
-            text_color=self.colors["text_secondary"]
-        ).pack(pady=(0, 6))
 
-        # ── Section label
-        lf = ctk.CTkFrame(right_panel, fg_color="transparent")
-        lf.pack(fill="x", padx=4, pady=(2, 4))
-        ctk.CTkFrame(lf, height=1, fg_color=self.colors["border"]).pack(fill="x", pady=(0, 2))
-        ctk.CTkLabel(
-            lf, text="DETECTIONS",
-            font=ctk.CTkFont(size=9, weight="bold"),
-            text_color=self.colors["text_secondary"], anchor="w"
-        ).pack(fill="x")
 
-        # ── Scrollable card list
-        self.results_scroll = ctk.CTkScrollableFrame(
-            right_panel,
-            fg_color="transparent",
-            scrollbar_button_color=self.colors["border"],
-            scrollbar_button_hover_color=self.colors["primary"]
-        )
-        self.results_scroll.pack(fill="both", expand=True, padx=4, pady=(0, 4))
 
         # Export button removed per user request
         self.save_btn = None  # kept as stub to avoid AttributeErrors
@@ -641,72 +639,8 @@ class CableMarkerApp:
         
     def update_results(self):
         """Update results display with cards"""
-        # Clear existing cards
-        for widget in self.results_scroll.winfo_children():
-            widget.destroy()
-            
-        if not self.detected_markers:
-            # Show empty state
-            ctk.CTkLabel(
-                self.results_scroll,
-                text="No markers detected\nWaiting for input...",
-                font=ctk.CTkFont(size=12, slant="italic"),
-                text_color=self.colors["text_secondary"]
-            ).pack(pady=40)
-            self.markers_count.configure(text="0")
-            return
-            
-        self.markers_count.configure(text=f"{len(self.detected_markers)}")
-        
-        # Create cards for each marker
-        for i, marker in enumerate(self.detected_markers):
-            color = marker.get('primary_color', 'Unknown')
-            confidence = marker['confidence']
-            stripes = marker.get('stripes_in_group', marker.get('stripe_count', 3))
-            
-            # Card Container
-            card = ctk.CTkFrame(self.results_scroll, fg_color=self.colors["bg"], corner_radius=8)
-            card.pack(fill="x", pady=(0, 10))
-            
-            # Card Content
-            content = ctk.CTkFrame(card, fg_color="transparent")
-            content.pack(fill="x", padx=10, pady=10)
-            
-            # Left: Color Indicator
-            indicator_color = self._get_color_hex(color)
-            indicator = ctk.CTkLabel(content, text="●", text_color=indicator_color, font=ctk.CTkFont(size=18))
-            indicator.pack(side="left", padx=(0, 10))
-            
-            # Middle: Info
-            info_frame = ctk.CTkFrame(content, fg_color="transparent")
-            info_frame.pack(side="left", fill="both", expand=True)
-            
-            ctk.CTkLabel(
-                info_frame, 
-                text=f"{color} Marker", 
-                font=ctk.CTkFont(size=12, weight="bold"),
-                text_color=self.colors["text"],
-                anchor="w"
-            ).pack(fill="x")
-            
-            ctk.CTkLabel(
-                info_frame, 
-                text=f"{stripes} Stripes | ID #{i+1}", 
-                font=ctk.CTkFont(size=11),
-                text_color=self.colors["text_secondary"],
-                anchor="w"
-            ).pack(fill="x")
-            
-            # Right: Confidence
-            badge = ctk.CTkFrame(content, fg_color=self.colors["surface"], corner_radius=12)
-            badge.pack(side="right")
-            
-            ctk.CTkLabel(
-                badge,
-                text=f"{int(confidence)}%",
-                font=ctk.CTkFont(size=11, weight="bold"),
-                text_color=self.colors["success"] if confidence > 80 else self.colors["warning"]
-            ).pack(padx=8, pady=2)
+        # Feature removed per user request: No list of detections in the right panel
+        pass
             
     def _get_color_hex(self, color_name):
         """Helper to get hex code for UI indicators"""
@@ -901,8 +835,8 @@ class CableMarkerApp:
                         now = time.time()
                         can_start = False
                         with self.inference_lock:
-                            # Allow up to 10 concurrent requests for continuous feel
-                            if self.active_inference_count < 10 and (now - last_inference_time) >= MIN_INFERENCE_INTERVAL:
+                            # Allow ONLY 1 concurrent request so we don't hog CPU and slow down frame rate
+                            if self.active_inference_count < 1 and (now - last_inference_time) >= MIN_INFERENCE_INTERVAL:
                                 can_start = True
                                 self.active_inference_count += 1
                                 self.inference_counter += 1
