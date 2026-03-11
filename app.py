@@ -60,11 +60,9 @@ class CableMarkerApp:
         if self.is_small_screen:
             self.root.geometry("480x320")
             self.sidebar_width = 160
-            self.right_panel_width = 0  # Remove completely to maximize camera frame
         else:
             self.root.geometry("800x480")
             self.sidebar_width = 200
-            self.right_panel_width = 120
             
         self.root.minsize(480, 320)
         self.root.configure(fg_color=self.colors["bg"])
@@ -124,21 +122,19 @@ class CableMarkerApp:
         
     def setup_ui(self):
         """Initialize the modern Dashboard UI"""
-        # Configure grid layout (3 columns: Sidebar, Main, Right Panel)
+        # Configure grid layout (2 columns: Sidebar, Main)
         self.root.grid_columnconfigure(0, weight=0, minsize=self.sidebar_width)  # Left Sidebar (Controls)
         self.root.grid_columnconfigure(1, weight=1)               # Center (Video)
-        self.root.grid_columnconfigure(2, weight=0, minsize=self.right_panel_width)  # Right Panel (Insights)
         
         self.root.grid_rowconfigure(0, weight=0, minsize=30)      # Header
         self.root.grid_rowconfigure(1, weight=1)                  # Main Content
         self.root.grid_rowconfigure(2, weight=0, minsize=10)      # Footer
         
+        self.save_btn = None  # kept as stub to avoid AttributeErrors
         self.create_header()
         self.create_sidebar()        # Left: Controls
         self.create_main_display()   # Center: Video
-        if not self.is_small_screen:
-            self.create_right_panel()    # Right: Insights
-        # self.create_footer()       # Removed footer for cleaner look, status moved to sidebar/header
+        # Right insights panel removed per user request
 
         
     def create_header(self):
@@ -169,14 +165,32 @@ class CableMarkerApp:
             text_color=self.colors["primary"]
         ).pack(side="left")
 
-        # Right: Status pill
+        # Right container for count and status pill
+        right_container = ctk.CTkFrame(header, fg_color="transparent")
+        right_container.grid(row=0, column=2, sticky="e", padx=8)
+        
+        ctk.CTkLabel(
+            right_container,
+            text="DETECTED:",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=self.colors["text_secondary"]
+        ).pack(side="left", padx=(0, 4))
+        
+        self.markers_count = ctk.CTkLabel(
+            right_container,
+            text="0",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=self.colors["primary"]
+        )
+        self.markers_count.pack(side="left", padx=(0, 16))
+
         self.header_status = ctk.CTkLabel(
-            header,
+            right_container,
             text="● System Ready",
             font=ctk.CTkFont(size=10, weight="bold"),
             text_color=self.colors["success"]
         )
-        self.header_status.grid(row=0, column=2, sticky="e", padx=8)
+        self.header_status.pack(side="left")
         
     def create_sidebar(self):
         """Create controls sidebar (Left Panel) — Premium Redesign"""
@@ -396,56 +410,7 @@ class CableMarkerApp:
 
         self.image_label = None
         
-    def create_right_panel(self):
-        """Create the Right Insights Panel — Premium Redesign"""
-        right_panel = ctk.CTkFrame(
-            self.root,
-            width=self.right_panel_width,
-            fg_color=self.colors["surface"],
-            corner_radius=0
-        )
-        right_panel.grid(row=1, column=2, sticky="nsew", padx=0, pady=0)
-        right_panel.grid_propagate(False)
-
-        # Left border accent
-        ctk.CTkFrame(
-            right_panel, width=1, fg_color=self.colors["border"]
-        ).place(relx=0, rely=0, relheight=1.0, anchor="nw")
-
-        # ── Big counter card
-        counter_card = ctk.CTkFrame(
-            right_panel,
-            fg_color=self.colors["surface2"],
-            corner_radius=4
-        )
-        
-        # Adjust paddings based on screen size
-        card_padx = 1 if self.is_small_screen else 4
-        card_pady_top = 2 if self.is_small_screen else 10
-        card_pady_bottom = 2 if self.is_small_screen else 6
-        
-        counter_card.pack(fill="x", padx=card_padx, pady=(card_pady_top, card_pady_bottom))
-
-        ctk.CTkLabel(
-            counter_card,
-            text="DETECTED",
-            font=ctk.CTkFont(size=6 if self.is_small_screen else 9, weight="bold"),
-            text_color=self.colors["text_secondary"]
-        ).pack(pady=(2 if self.is_small_screen else 6, 0))
-
-        self.markers_count = ctk.CTkLabel(
-            counter_card,
-            text="0",
-            font=ctk.CTkFont(size=18 if self.is_small_screen else 36, weight="bold"),
-            text_color=self.colors["primary"]
-        )
-        self.markers_count.pack(pady=(0, 2))
-
-
-
-
-        # Export button removed per user request
-        self.save_btn = None  # kept as stub to avoid AttributeErrors
+    # Right panel removed per user request
 
     # Footer removed
 
