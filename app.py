@@ -11,19 +11,36 @@ import numpy as np
 from roboflow_detector import RoboflowDetector
 from gpio_controller import GPIOController
 import os
+import sys
+import multiprocessing
 from datetime import datetime
 import threading
 import time
 
 
-# Check if running on Raspberry Pi
-IS_RASPBERRY_PI = os.path.exists('/proc/device-tree/model') and \
-                  'Raspberry Pi' in open('/proc/device-tree/model', 'r').read()
+# Check if running on Raspberry Pi (safe, wrapped in try/except)
+def _check_is_raspberry_pi() -> bool:
+    try:
+        if not os.path.exists('/proc/device-tree/model'):
+            return False
+        with open('/proc/device-tree/model', 'r') as f:
+            return 'Raspberry Pi' in f.read()
+    except Exception:
+        return False
+
+IS_RASPBERRY_PI = _check_is_raspberry_pi()
 
 if IS_RASPBERRY_PI:
     print("🍓 Running on Raspberry Pi - Optimized mode enabled")
 else:
     print("💻 Running on desktop - Standard mode")
+
+
+def _get_app_dir() -> str:
+    """Return the directory next to the executable (or script), for user data."""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 class CableMarkerApp:
@@ -77,8 +94,8 @@ class CableMarkerApp:
         # Initialize GPIO
         self.gpio_controller = GPIOController(pin1=18, pin2=23, pin3=24)
         
-        # Setup directories
-        self.detections_dir = "detections"
+        # Setup directories — stored next to the executable, not inside the bundle
+        self.detections_dir = os.path.join(_get_app_dir(), "detections")
         os.makedirs(self.detections_dir, exist_ok=True)
         
         # Variables
@@ -1426,5 +1443,7 @@ class CableMarkerApp:
 
 
 if __name__ == "__main__":
+    # Required for PyInstaller + multiprocessing on all platforms
+    multiprocessing.freeze_support()
     app = CableMarkerApp()
     app.run()

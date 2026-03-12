@@ -1,19 +1,11 @@
 #!/bin/bash
 # ============================================================
-#  build_rpi.sh — Build Cable Marker Detector for Raspberry Pi
+#  build_mac.sh — Build Cable Marker Detector for macOS
 # ============================================================
 set -e
 
-echo "🍓 Building Cable Marker Detector for Raspberry Pi..."
+echo "🍎 Building Cable Marker Detector for macOS..."
 echo ""
-
-# ── Check we are on Raspberry Pi (warn, do not block) ────────────────────────
-if [ ! -f /proc/device-tree/model ] || ! grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
-    echo "⚠️  Warning: This script is intended for Raspberry Pi."
-    echo "   Cross-compiling on other Linux won't produce a working ARM binary."
-    echo "   Continuing anyway — press Ctrl+C within 5 seconds to abort."
-    sleep 5
-fi
 
 # ── Check Python virtual environment ─────────────────────────────────────────
 if [ -z "$VIRTUAL_ENV" ]; then
@@ -23,7 +15,7 @@ if [ -z "$VIRTUAL_ENV" ]; then
     else
         echo "❌ No virtual environment found. Create one first:"
         echo "   python3 -m venv venv && source venv/bin/activate"
-        echo "   pip install -r requirements_rpi.txt"
+        echo "   pip install -r requirements.txt"
         exit 1
     fi
 fi
@@ -34,8 +26,8 @@ if [ ! -f "weights-5.pt" ]; then
     exit 1
 fi
 
-if [ ! -f "rpi.spec" ]; then
-    echo "❌ rpi.spec not found! Make sure it exists in this directory."
+if [ ! -f "mac.spec" ]; then
+    echo "❌ mac.spec not found! Make sure it exists in this directory."
     exit 1
 fi
 
@@ -46,32 +38,24 @@ pip install --quiet --upgrade pyinstaller
 # ── Build ─────────────────────────────────────────────────────────────────────
 echo "🔨 Running PyInstaller..."
 echo ""
-pyinstaller rpi.spec --clean --noconfirm
+pyinstaller mac.spec --clean --noconfirm
 
 echo ""
-if [ -f "dist/cable_marker" ]; then
+if [ -d "dist/CableMarkerDetector.app" ]; then
+    echo "✅ Build successful!"
+    echo "📁 App bundle: dist/CableMarkerDetector.app"
+    echo ""
+    echo "To run:"
+    echo "   open dist/CableMarkerDetector.app"
+    echo ""
+    echo "Note: On first run macOS may warn about an untrusted developer."
+    echo "      Go to System Settings → Privacy & Security and click 'Open Anyway'."
+elif [ -f "dist/cable_marker" ]; then
     echo "✅ Build successful!"
     echo "📁 Executable: dist/cable_marker"
     echo ""
-
-    # ── Desktop shortcut (optional) ──────────────────────────────────────────
-    DESKTOP="$HOME/Desktop"
-    if [ -d "$DESKTOP" ] && [ -f "CableMarkerDetector.desktop" ]; then
-        echo "🔗 Installing desktop shortcut..."
-        cp CableMarkerDetector.desktop "$DESKTOP/"
-        chmod +x "$DESKTOP/CableMarkerDetector.desktop"
-
-        APPS_DIR="$HOME/.local/share/applications"
-        mkdir -p "$APPS_DIR"
-        cp CableMarkerDetector.desktop "$APPS_DIR/"
-        echo "   Shortcut placed on Desktop and in application menu."
-    fi
-
-    echo ""
-    echo "To run the application:"
+    echo "To run:"
     echo "   ./dist/cable_marker"
-    echo ""
-    echo "Or double-click the desktop shortcut (if installed)."
 else
     echo "❌ Build produced no output. Check the PyInstaller logs above."
     exit 1

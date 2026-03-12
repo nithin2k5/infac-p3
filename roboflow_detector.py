@@ -7,6 +7,14 @@ import numpy as np
 from typing import List, Dict, Optional, Callable, Tuple
 import threading
 import os
+import sys
+
+
+def _get_base_dir() -> str:
+    """Return the base directory for bundled resources (PyInstaller or source)."""
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
 
 try:
     from ultralytics import YOLO
@@ -32,7 +40,7 @@ class RoboflowDetector:
         self._initialized = False
         
         # Load local YOLO model
-        model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'weights-5.pt')
+        model_path = os.path.join(_get_base_dir(), 'weights-5.pt')
         if YOLO_AVAILABLE:
             if os.path.exists(model_path):
                 print(f"🔄 Initializing local YOLO model from {model_path}...")
