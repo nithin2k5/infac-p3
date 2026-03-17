@@ -46,7 +46,38 @@ hiddenimports = [
     'queue',
     'hashlib',
 ]
-hiddenimports += collect_submodules('ultralytics')
+# WARNING: collect_submodules('ultralytics') crashes on Raspberry Pi because the
+# isolated subprocess it spawns imports torch, exhausting limited RAM.
+# Instead, list the ultralytics submodules that are actually used by the app.
+hiddenimports += [
+    'ultralytics.models',
+    'ultralytics.models.yolo',
+    'ultralytics.models.yolo.detect',
+    'ultralytics.models.yolo.detect.predict',
+    'ultralytics.models.yolo.detect.train',
+    'ultralytics.models.yolo.detect.val',
+    'ultralytics.engine',
+    'ultralytics.engine.model',
+    'ultralytics.engine.predictor',
+    'ultralytics.engine.results',
+    'ultralytics.nn',
+    'ultralytics.nn.modules',
+    'ultralytics.nn.modules.block',
+    'ultralytics.nn.modules.conv',
+    'ultralytics.nn.modules.head',
+    'ultralytics.nn.tasks',
+    'ultralytics.utils',
+    'ultralytics.utils.checks',
+    'ultralytics.utils.downloads',
+    'ultralytics.utils.files',
+    'ultralytics.utils.ops',
+    'ultralytics.utils.plotting',
+    'ultralytics.utils.torch_utils',
+    'ultralytics.data',
+    'ultralytics.data.augment',
+    'ultralytics.data.utils',
+    'ultralytics.cfg',
+]
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(
