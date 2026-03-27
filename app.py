@@ -797,7 +797,7 @@ class CableMarkerApp:
                 self.latest_detections_lock = threading.Lock()
                 self.is_inferencing = False
                 last_inference_time = 0.0
-                MIN_INFERENCE_INTERVAL = 0.05  # 20 FPS target (assuming sufficient threads)
+                MIN_INFERENCE_INTERVAL = 0.05  # 20 FPS target
                 
                 while self.camera_active and self.camera.isOpened():
                     try:

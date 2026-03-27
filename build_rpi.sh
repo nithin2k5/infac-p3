@@ -49,9 +49,9 @@ echo ""
 pyinstaller rpi.spec --clean --noconfirm
 
 echo ""
-if [ -f "dist/cable_marker" ]; then
+if [ -f "dist/cable_marker/cable_marker" ]; then
     echo "✅ Build successful!"
-    echo "📁 Executable: dist/cable_marker"
+    echo "📁 Executable: dist/cable_marker/cable_marker"
     echo ""
 
     # ── Desktop shortcut (optional) ──────────────────────────────────────────
@@ -69,7 +69,7 @@ if [ -f "dist/cable_marker" ]; then
 
     echo ""
     echo "To run the application:"
-    echo "   ./dist/cable_marker"
+    echo "   ./dist/cable_marker/cable_marker"
     echo ""
     echo "Or double-click the desktop shortcut (if installed)."
 else

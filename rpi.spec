@@ -99,20 +99,27 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='cable_marker',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,          # UPX causes issues on Raspberry Pi ARM
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True,       # Keep terminal visible on RPi for error messages
+    upx=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='cable_marker',
 )
