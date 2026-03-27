@@ -33,6 +33,7 @@ Thumbs.db
 
 # Project specific
 detections/
+runs/
 
 # Logs
 *.log
