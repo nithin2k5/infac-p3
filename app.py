@@ -117,7 +117,10 @@ class CableMarkerApp:
         self.camera = None
         self.camera_active = False
         self.camera_index = 0
+        self.camera_backend = cv2.CAP_ANY
+        self.camera_map = {}  # label -> (index, backend)
         self.capture_thread = None
+        self.simulation_running = False
         
         # Parallel Inference Performance (Optimized)
         import concurrent.futures
@@ -698,27 +701,75 @@ class CableMarkerApp:
     
     def get_available_cameras(self):
         """Get available cameras including simulation and video file modes"""
+        self.camera_map = {}
         cameras = ["Select Camera"]
 
-        # Add Video File option
         cameras.append("📹 Load Video File")
-
-        # Add Simulation Mode option
         cameras.append("📷 Simulate Loaded Image")
         cameras.append("---")
 
-        # Check specifically for macOS
-        import platform
+        import platform, glob, os
         system = platform.system()
-        backend = cv2.CAP_ANY
+
         if system == 'Darwin':
             backend = cv2.CAP_AVFOUNDATION
+            for i in range(5):
+                cap = cv2.VideoCapture(i, backend)
+                if cap.isOpened():
+                    label = f"Camera {i}"
+                    cameras.append(label)
+                    self.camera_map[label] = (i, backend)
+                    cap.release()
 
-        for i in range(5):  # Reduced range to speed up startup
-            cap = cv2.VideoCapture(i, backend)
-            if cap.isOpened():
-                cameras.append(f"Camera {i}")
+        elif system == 'Linux':
+            # CSI / board camera name fragments (RPi camera module, IMX sensors, etc.)
+            CSI_KEYWORDS = ['unicam', 'bcm2835', 'mmal', 'rpicam', 'imx', 'ov5647', 'ov9281']
+
+            video_devices = sorted(glob.glob('/dev/video*'))
+            for dev in video_devices:
+                try:
+                    idx = int(dev.replace('/dev/video', ''))
+                except ValueError:
+                    continue
+
+                # Read V4L2 device name from sysfs
+                name_path = f'/sys/class/video4linux/video{idx}/name'
+                device_name = None
+                if os.path.exists(name_path):
+                    try:
+                        with open(name_path) as f:
+                            device_name = f.read().strip()
+                    except OSError:
+                        pass
+
+                # Try opening with V4L2 backend
+                cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
+                if not cap.isOpened():
+                    cap.release()
+                    continue
                 cap.release()
+
+                is_board = device_name and any(kw in device_name.lower() for kw in CSI_KEYWORDS)
+
+                if is_board:
+                    label = f"📷 Board Camera {idx} [{device_name}]"
+                elif device_name:
+                    label = f"Camera {idx} [{device_name}]"
+                else:
+                    label = f"Camera {idx}"
+
+                cameras.append(label)
+                self.camera_map[label] = (idx, cv2.CAP_V4L2)
+
+        else:
+            # Generic fallback
+            for i in range(5):
+                cap = cv2.VideoCapture(i)
+                if cap.isOpened():
+                    label = f"Camera {i}"
+                    cameras.append(label)
+                    self.camera_map[label] = (i, cv2.CAP_ANY)
+                    cap.release()
 
         return cameras
     
@@ -731,14 +782,19 @@ class CableMarkerApp:
         self.camera_start_btn.configure(state="normal")
 
         if "Load Video File" in choice:
-            self.camera_index = -2  # Special index for video file
+            self.camera_index = -2
+            self.camera_backend = cv2.CAP_ANY
         elif "Simulate Loaded Image" in choice:
-            self.camera_index = -1  # Special index for simulation
-        elif "Camera" in choice:
-            try:
-                self.camera_index = int(choice.split()[-1])
-            except:
-                self.camera_index = 0
+            self.camera_index = -1
+            self.camera_backend = cv2.CAP_ANY
+        elif choice in self.camera_map:
+            self.camera_index, self.camera_backend = self.camera_map[choice]
+        else:
+            # Fallback: parse index from label
+            import re
+            m = re.search(r'Camera\s+(\d+)', choice)
+            self.camera_index = int(m.group(1)) if m else 0
+            self.camera_backend = cv2.CAP_ANY
     
     def start_camera(self):
         """Start Local Camera Loop for real-time detection"""
@@ -759,13 +815,8 @@ class CableMarkerApp:
         try:
             print(f"📷 Starting local camera loop on device {self.camera_index}...")
             
-            # Initialize camera capture locally
-            import platform
-            system = platform.system()
-            if system == 'Darwin':
-                self.camera = cv2.VideoCapture(self.camera_index, cv2.CAP_AVFOUNDATION)
-            else:
-                self.camera = cv2.VideoCapture(self.camera_index)
+            # Initialize camera capture using backend selected during enumeration
+            self.camera = cv2.VideoCapture(self.camera_index, self.camera_backend)
             if not self.camera.isOpened():
                 messagebox.showerror("Error", f"Failed to open Camera {self.camera_index}")
                 return
