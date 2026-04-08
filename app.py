@@ -115,6 +115,7 @@ class CableMarkerApp:
         
         # Camera variables
         self.camera = None
+        self.picam2 = None
         self.camera_active = False
         self.camera_index = 0
         self.camera_backend = cv2.CAP_ANY
@@ -724,42 +725,64 @@ class CableMarkerApp:
         elif system == 'Linux':
             import fcntl, struct
 
-            # V4L2 ioctl to query device capabilities
-            VIDIOC_QUERYCAP = 0x80685600
+            # --- Board cameras via picamera2 (libcamera stack, RPi Camera Module 2/3/HQ) ---
+            try:
+                from picamera2 import Picamera2
+                cam_info = Picamera2.global_camera_info()
+                for info in cam_info:
+                    cam_num = info.get('Num', 0)
+                    model   = info.get('Model', 'Board Camera')
+                    label   = f"📷 Board Camera {cam_num} [{model}]"
+                    cameras.append(label)
+                    self.camera_map[label] = (cam_num, 'PICAMERA2')
+                    print(f"📷 Found board camera {cam_num}: {model}")
+            except ImportError:
+                print("⚠️ picamera2 not installed — board camera not available")
+            except Exception as e:
+                print(f"⚠️ picamera2 detection error: {e}")
+
+            # --- USB cameras via V4L2 (exclude CSI/ISP nodes) ---
+            VIDIOC_QUERYCAP    = 0x80685600
             V4L2_CAP_VIDEO_CAPTURE = 0x00000001
             V4L2_CAP_DEVICE_CAPS   = 0x80000000
+            CSI_KEYWORDS = ['unicam', 'bcm2835', 'mmal', 'rpicam', 'imx', 'ov5647',
+                            'ov9281', 'rp1-cfe', 'csi', 'pispbe']
 
-            def is_capture_device(dev_path):
-                """Return True only if the device supports VIDEO_CAPTURE (not ISP output nodes)."""
+            def is_usb_capture_device(dev_path, device_name):
+                """True if device is a real video capture source and NOT a CSI/ISP node."""
+                if device_name and any(kw in device_name.lower() for kw in CSI_KEYWORDS):
+                    return False  # board camera — handled by picamera2
                 try:
                     with open(dev_path, 'rb') as fd:
                         buf = b'\x00' * 104
                         result = fcntl.ioctl(fd.fileno(), VIDIOC_QUERYCAP, buf)
-                    caps     = struct.unpack_from('<I', result, 84)[0]  # capabilities
-                    dev_caps = struct.unpack_from('<I', result, 88)[0]  # device_caps
+                    caps     = struct.unpack_from('<I', result, 84)[0]
+                    dev_caps = struct.unpack_from('<I', result, 88)[0]
                     effective = dev_caps if (caps & V4L2_CAP_DEVICE_CAPS) else caps
                     return bool(effective & V4L2_CAP_VIDEO_CAPTURE)
                 except Exception:
                     return False
 
-            # CSI / board camera name fragments (RPi camera module, IMX sensors, etc.)
-            CSI_KEYWORDS = ['unicam', 'bcm2835', 'mmal', 'rpicam', 'imx', 'ov5647', 'ov9281',
-                            'rp1-cfe', 'csi']
-
-            seen_physical_devices = set()  # deduplicate by physical hardware
-            video_devices = sorted(glob.glob('/dev/video*'))
-            for dev in video_devices:
+            seen_physical_devices = set()
+            for dev in sorted(glob.glob('/dev/video*')):
                 try:
                     idx = int(dev.replace('/dev/video', ''))
                 except ValueError:
                     continue
 
-                # Skip ISP pipeline output/processing nodes — not real capture sources
-                if not is_capture_device(dev):
+                name_path = f'/sys/class/video4linux/video{idx}/name'
+                device_name = None
+                if os.path.exists(name_path):
+                    try:
+                        with open(name_path) as f:
+                            device_name = f.read().strip()
+                    except OSError:
+                        pass
+
+                if not is_usb_capture_device(dev, device_name):
                     continue
 
-                # One entry per physical camera — skip duplicate V4L2 nodes
-                # (RPi creates csi2_ch0/ch2/ch3/fe_image0 for the same sensor)
+                # Deduplicate by physical hardware path
                 physical_path = None
                 device_link = f'/sys/class/video4linux/video{idx}/device'
                 if os.path.exists(device_link):
@@ -772,25 +795,7 @@ class CableMarkerApp:
                         continue
                     seen_physical_devices.add(physical_path)
 
-                # Read V4L2 device name from sysfs
-                name_path = f'/sys/class/video4linux/video{idx}/name'
-                device_name = None
-                if os.path.exists(name_path):
-                    try:
-                        with open(name_path) as f:
-                            device_name = f.read().strip()
-                    except OSError:
-                        pass
-
-                is_board = device_name and any(kw in device_name.lower() for kw in CSI_KEYWORDS)
-
-                if is_board:
-                    label = f"📷 Board Camera {idx} [{device_name}]"
-                elif device_name:
-                    label = f"Camera {idx} [{device_name}]"
-                else:
-                    label = f"Camera {idx}"
-
+                label = f"Camera {idx} [{device_name}]" if device_name else f"Camera {idx}"
                 cameras.append(label)
                 self.camera_map[label] = (idx, cv2.CAP_V4L2)
 
@@ -843,7 +848,12 @@ class CableMarkerApp:
         if self.camera_index == -1:
             self.start_simulation_mode()
             return
-            
+
+        # RPi Camera Module via picamera2 (libcamera)
+        if self.camera_backend == 'PICAMERA2':
+            self._start_picamera2_loop()
+            return
+
         # Local Camera Loop (replacing WebRTC)
         try:
             print(f"📷 Starting local camera loop on device {self.camera_index}...")
@@ -1039,6 +1049,164 @@ class CableMarkerApp:
             import traceback
             traceback.print_exc()
 
+
+    def _start_picamera2_loop(self):
+        """Start camera loop using picamera2 for RPi Camera Module (libcamera stack)"""
+        try:
+            from picamera2 import Picamera2
+        except ImportError:
+            messagebox.showerror("Error", "picamera2 is not installed.\nRun: pip install picamera2")
+            return
+
+        try:
+            self.picam2 = Picamera2(self.camera_index)
+            config = self.picam2.create_video_configuration(
+                main={"format": "BGR888", "size": (1280, 720)}
+            )
+            self.picam2.configure(config)
+            self.picam2.start()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open board camera: {e}")
+            self.picam2 = None
+            return
+
+        self.camera_active = True
+        self.simulation_running = False
+
+        self.camera_start_btn.configure(state="disabled")
+        self.camera_stop_btn.configure(state="normal")
+        self.camera_dropdown.configure(state="disabled")
+
+        if self.placeholder:
+            self.placeholder.place_forget()
+        if hasattr(self, 'placeholder_icon'):
+            self.placeholder_icon.place_forget()
+
+        self.header_status.configure(text="● Starting Camera...", text_color=self.colors["warning"])
+
+        def camera_loop():
+            print("🔹 picamera2 thread started")
+            self.latest_detections_lock = threading.Lock()
+            last_inference_time = 0.0
+            MIN_INFERENCE_INTERVAL = 0.05  # 20 FPS target
+
+            while self.camera_active:
+                try:
+                    frame = self.picam2.capture_array("main")
+                    if frame is None:
+                        time.sleep(0.01)
+                        continue
+
+                    self.original_image = frame.copy()
+
+                    # --- ASYNC INFERENCE ---
+                    now = time.time()
+                    can_start = False
+                    with self.inference_lock:
+                        if self.active_inference_count < 1 and (now - last_inference_time) >= MIN_INFERENCE_INTERVAL:
+                            can_start = True
+                            self.active_inference_count += 1
+                            self.inference_counter += 1
+                            current_job_id = self.inference_counter
+                            last_inference_time = now
+
+                    if can_start:
+                        def run_inference_job(input_frame, job_id):
+                            try:
+                                detect_frame = input_frame
+                                offset_x, offset_y = 0, 0
+
+                                if self.roi:
+                                    x, y, w, h = self.roi
+                                    img_h, img_w = input_frame.shape[:2]
+                                    x = max(0, min(x, img_w))
+                                    y = max(0, min(y, img_h))
+                                    w = min(w, img_w - x)
+                                    h = min(h, img_h - y)
+                                    if w > 0 and h > 0:
+                                        detect_frame = input_frame[y:y+h, x:x+w]
+                                        offset_x, offset_y = x, y
+
+                                detections = self.detector.detect_single_frame(detect_frame)
+
+                                if offset_x > 0 or (offset_y > 0 and detections):
+                                    for marker in detections:
+                                        if 'bounding_box' in marker:
+                                            marker['bounding_box']['x'] += offset_x
+                                            marker['bounding_box']['y'] += offset_y
+                                        if 'center' in marker:
+                                            cx, cy = marker['center']
+                                            marker['center'] = (cx + offset_x, cy + offset_y)
+
+                                if detections:
+                                    detections = self.detector._group_stripes_into_markings(detections)
+
+                                with self.latest_detections_lock:
+                                    if job_id > self.completed_inference_id:
+                                        self.all_detected_markers = detections
+                                        self.completed_inference_id = job_id
+                            except Exception as e:
+                                print(f"⚠️ Inference error: {e}")
+                            finally:
+                                with self.inference_lock:
+                                    self.active_inference_count -= 1
+
+                        self.inference_executor.submit(run_inference_job, frame.copy(), current_job_id)
+
+                    # --- RENDER ---
+                    with self.latest_detections_lock:
+                        current_all_markers = self.all_detected_markers.copy() if hasattr(self, 'all_detected_markers') else []
+
+                    self.all_detected_markers = current_all_markers
+                    self.apply_color_filter()
+                    filtered_detections = self.detected_markers.copy()
+
+                    if filtered_detections:
+                        display_frame = self.detector.draw_detections(frame, filtered_detections)
+                    else:
+                        display_frame = frame.copy()
+                    self.processed_image = display_frame
+
+                    if self.roi:
+                        x, y, w, h = self.roi
+                        cv2.rectangle(display_frame, (x, y), (x+w, y+h), (0, 255, 255), 2)
+                        cv2.putText(display_frame, "ROI ACTIVE", (x, y-10),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+                    def update_ui_components(df=display_frame, fd=filtered_detections):
+                        self.display_image(df)
+                        self.markers_count.configure(text=f"{len(fd)}")
+                        self.gpio_controller.process_detected_colors(fd)
+                        if fd:
+                            self.header_status.configure(
+                                text=f"● Live: {len(fd)} Detected",
+                                text_color=self.colors["success"]
+                            )
+                        else:
+                            self.header_status.configure(
+                                text="● Live: Scanning...",
+                                text_color=self.colors["primary"]
+                            )
+
+                    self.root.after(0, update_ui_components)
+                    time.sleep(0.01)
+
+                except Exception as e:
+                    print(f"⚠️ Error in picamera2 loop: {e}")
+                    time.sleep(0.5)
+
+            # Cleanup
+            try:
+                self.picam2.stop()
+                self.picam2.close()
+                self.picam2 = None
+            except Exception:
+                pass
+            print("🛑 picamera2 thread stopped")
+
+        self.capture_thread = threading.Thread(target=camera_loop, daemon=True)
+        self.capture_thread.start()
+        print("✅ picamera2 camera loop started")
 
     def start_simulation_mode(self):
         """Start Simulation Mode using loaded image"""
@@ -1336,11 +1504,19 @@ class CableMarkerApp:
         # Stop WebRTC stream (legacy cleanup if needed)
         # self.detector.stop_webrtc_stream()
         
-        # Camera release is handled in the thread loop when self.camera_active becomes False
-        # But we can force release here if we want to be safe, though usually safer to let thread exit
+        # Release OpenCV camera if open
         if hasattr(self, 'camera') and self.camera is not None and getattr(self.camera, 'isOpened', lambda: False)():
-             self.camera.release()
-             self.camera = None
+            self.camera.release()
+            self.camera = None
+
+        # Release picamera2 if open (board camera)
+        if self.picam2 is not None:
+            try:
+                self.picam2.stop()
+                self.picam2.close()
+            except Exception:
+                pass
+            self.picam2 = None
         
         self.camera_start_btn.configure(state="normal")
         self.camera_stop_btn.configure(state="disabled")

@@ -18,10 +18,8 @@ customtkinter>=5.2.0
 rpi-lgpio>=0.6  # Drop-in replacement for RPi.GPIO on Pi 5
 # RPi.GPIO>=0.7.1 # Legacy (kept for Pi 3/4 if needed, but rpi-lgpio is preferred on new OS)
 
-# Optional: For better camera performance on Raspberry Pi
-# Uncomment if you want to use these:
-# picamera2  # For Raspberry Pi camera module (newer, recommended)
-# v4l2-python3  # For advanced USB camera control
+# Raspberry Pi Camera Module support (libcamera stack)
+picamera2  # Required for RPi Camera Module 2/3/HQ
 
 
 

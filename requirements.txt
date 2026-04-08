@@ -6,4 +6,5 @@ ultralytics>=8.0.0
 torch>=2.0.0
 torchvision>=0.15.0
 # RPi.GPIO>=0.7.0  # Only available on Raspberry Pi - install manually: pip install RPi.GPIO
+# picamera2          # Only available on Raspberry Pi - see requirements_rpi.txt
 
