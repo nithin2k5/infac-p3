@@ -746,6 +746,7 @@ class CableMarkerApp:
             CSI_KEYWORDS = ['unicam', 'bcm2835', 'mmal', 'rpicam', 'imx', 'ov5647', 'ov9281',
                             'rp1-cfe', 'csi']
 
+            seen_physical_devices = set()  # deduplicate by physical hardware
             video_devices = sorted(glob.glob('/dev/video*'))
             for dev in video_devices:
                 try:
@@ -756,6 +757,20 @@ class CableMarkerApp:
                 # Skip ISP pipeline output/processing nodes — not real capture sources
                 if not is_capture_device(dev):
                     continue
+
+                # One entry per physical camera — skip duplicate V4L2 nodes
+                # (RPi creates csi2_ch0/ch2/ch3/fe_image0 for the same sensor)
+                physical_path = None
+                device_link = f'/sys/class/video4linux/video{idx}/device'
+                if os.path.exists(device_link):
+                    try:
+                        physical_path = os.path.realpath(device_link)
+                    except OSError:
+                        pass
+                if physical_path:
+                    if physical_path in seen_physical_devices:
+                        continue
+                    seen_physical_devices.add(physical_path)
 
                 # Read V4L2 device name from sysfs
                 name_path = f'/sys/class/video4linux/video{idx}/name'
