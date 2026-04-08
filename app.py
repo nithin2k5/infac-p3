@@ -722,14 +722,39 @@ class CableMarkerApp:
                     cap.release()
 
         elif system == 'Linux':
+            import fcntl, struct
+
+            # V4L2 ioctl to query device capabilities
+            VIDIOC_QUERYCAP = 0x80685600
+            V4L2_CAP_VIDEO_CAPTURE = 0x00000001
+            V4L2_CAP_DEVICE_CAPS   = 0x80000000
+
+            def is_capture_device(dev_path):
+                """Return True only if the device supports VIDEO_CAPTURE (not ISP output nodes)."""
+                try:
+                    with open(dev_path, 'rb') as fd:
+                        buf = b'\x00' * 104
+                        result = fcntl.ioctl(fd.fileno(), VIDIOC_QUERYCAP, buf)
+                    caps     = struct.unpack_from('<I', result, 84)[0]  # capabilities
+                    dev_caps = struct.unpack_from('<I', result, 88)[0]  # device_caps
+                    effective = dev_caps if (caps & V4L2_CAP_DEVICE_CAPS) else caps
+                    return bool(effective & V4L2_CAP_VIDEO_CAPTURE)
+                except Exception:
+                    return False
+
             # CSI / board camera name fragments (RPi camera module, IMX sensors, etc.)
-            CSI_KEYWORDS = ['unicam', 'bcm2835', 'mmal', 'rpicam', 'imx', 'ov5647', 'ov9281']
+            CSI_KEYWORDS = ['unicam', 'bcm2835', 'mmal', 'rpicam', 'imx', 'ov5647', 'ov9281',
+                            'rp1-cfe', 'csi']
 
             video_devices = sorted(glob.glob('/dev/video*'))
             for dev in video_devices:
                 try:
                     idx = int(dev.replace('/dev/video', ''))
                 except ValueError:
+                    continue
+
+                # Skip ISP pipeline output/processing nodes — not real capture sources
+                if not is_capture_device(dev):
                     continue
 
                 # Read V4L2 device name from sysfs
@@ -741,13 +766,6 @@ class CableMarkerApp:
                             device_name = f.read().strip()
                     except OSError:
                         pass
-
-                # Try opening with V4L2 backend
-                cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
-                if not cap.isOpened():
-                    cap.release()
-                    continue
-                cap.release()
 
                 is_board = device_name and any(kw in device_name.lower() for kw in CSI_KEYWORDS)
 
