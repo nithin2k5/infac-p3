@@ -37,9 +37,18 @@ else:
 
 
 def _get_app_dir() -> str:
-    """Return the directory next to the executable (or script), for user data."""
+    """Return a writable directory for user data (detections, logs).
+
+    When running as a PyInstaller bundle the dist/ folder may be owned by
+    root (if a previous build was run with sudo), which causes a
+    PermissionError when trying to create sub-directories inside it.
+    We therefore write all runtime data to ~/infac_data/ instead — a
+    location that is always writable by the logged-in user.
+    """
     if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
+        data_dir = os.path.join(os.path.expanduser('~'), 'infac_data')
+        os.makedirs(data_dir, exist_ok=True)
+        return data_dir
     return os.path.dirname(os.path.abspath(__file__))
 
 
