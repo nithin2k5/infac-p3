@@ -47,6 +47,21 @@ fi
 echo "📦 Ensuring PyInstaller is up to date..."
 pip install --quiet --upgrade pyinstaller
 
+# ── Clean previous build artifacts (fix permission-denied from sudo builds) ───
+echo "🧹 Cleaning previous build artifacts..."
+for DIR in dist build __pycache__; do
+    if [ -d "$DIR" ]; then
+        # If we don't own it (e.g. previous run used sudo), fix ownership first
+        if [ ! -w "$DIR" ]; then
+            echo "   ⚠️  '$DIR' is not writable — fixing ownership with sudo..."
+            sudo chown -R "$USER":"$USER" "$DIR"
+        fi
+        rm -rf "$DIR"
+        echo "   ✔ Removed $DIR"
+    fi
+done
+echo ""
+
 # ── Build ─────────────────────────────────────────────────────────────────────
 echo "🔨 Running PyInstaller..."
 echo ""
