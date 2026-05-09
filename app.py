@@ -67,7 +67,7 @@ class CableMarkerApp:
         
         # Main window configuration
         self.root = ctk.CTk()
-        self.root.title("cable marker")
+        self.root.title("INFAC — Cable Marker Detection")
         
         # Enhanced responsiveness for 3.5" layout
         screen_w = self.root.winfo_screenwidth()
@@ -179,11 +179,22 @@ class CableMarkerApp:
         left = ctk.CTkFrame(header, fg_color="transparent")
         left.grid(row=0, column=0, sticky="w", padx=8, pady=4)
 
+        # Brand: INFAC wordmark + sub-label
+        brand_frame = ctk.CTkFrame(left, fg_color="transparent")
+        brand_frame.pack(side="left")
+
         ctk.CTkLabel(
-            left,
-            text="▨ cable marker",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            brand_frame,
+            text="INFAC",
+            font=ctk.CTkFont(size=13, weight="bold"),
             text_color=self.colors["primary"]
+        ).pack(side="left")
+
+        ctk.CTkLabel(
+            brand_frame,
+            text="  ·  Cable Marker Vision",
+            font=ctk.CTkFont(size=10),
+            text_color=self.colors["text_secondary"]
         ).pack(side="left")
 
         # Right container for count and status pill
@@ -272,7 +283,7 @@ class CableMarkerApp:
             return btn
 
         # ── INPUT SOURCE ──────────────────────────
-        section_label("INPUT SOURCE")
+        section_label("SOURCE")
 
         cam_frame = ctk.CTkFrame(scroll, fg_color="transparent")
         cam_frame.pack(fill="x", padx=4, pady=2)
@@ -295,17 +306,17 @@ class CableMarkerApp:
         self.camera_dropdown.pack(fill="x")
 
         self.camera_start_btn = icon_btn(
-            scroll, "▶", "Start Stream", self.start_camera,
+            scroll, "▶", "Start", self.start_camera,
             color=self.colors["success"], hover="#00b856", state="disabled"
         )
         self.camera_stop_btn = icon_btn(
-            scroll, "⏹", "Stop Stream", self.stop_camera,
+            scroll, "⏹", "Stop", self.stop_camera,
             color=self.colors["error"], hover="#cc0033", state="disabled"
         )
-        icon_btn(scroll, "📂", "Load File", self.load_image)
+        icon_btn(scroll, "📂", "Load Image", self.load_image)
 
         # ── FILTERS ───────────────────────────────
-        section_label("COLOR FILTER")
+        section_label("FILTER")
 
         filter_frame = ctk.CTkFrame(scroll, fg_color="transparent")
         filter_frame.pack(fill="x", padx=4, pady=2)
@@ -328,7 +339,7 @@ class CableMarkerApp:
         self.color_filter_dropdown.pack(fill="x")
 
         # ── REGION OF INTEREST ────────────────────
-        section_label("REGION OF INTEREST")
+        section_label("REGION OF INTEREST (ROI)")
 
         roi_row = ctk.CTkFrame(scroll, fg_color="transparent")
         roi_row.pack(fill="x", padx=4, pady=2)
@@ -356,14 +367,14 @@ class CableMarkerApp:
         self.reset_roi_btn.grid(row=0, column=1, sticky="ew", padx=(2, 0))
 
         # ── ACTIONS ───────────────────────────────
-        section_label("ACTIONS")
+        section_label("VIEW")
         self.reset_btn = icon_btn(
-            scroll, "↺", "Reset View", self.reset_view, state="disabled"
+            scroll, "↺", "Reset", self.reset_view, state="disabled"
         )
 
         # ── GPIO ──────────────────────────────────
         if IS_RASPBERRY_PI or self.gpio_controller.gpio_available:
-            section_label("HARDWARE")
+            section_label("GPIO OUTPUT")
             gpio_status = self.gpio_controller.get_status()
             status_text = "GPIO Ready" if gpio_status["initialized"] else "GPIO Simulated"
             sc = self.colors["success"] if gpio_status["initialized"] else self.colors["warning"]
@@ -416,7 +427,7 @@ class CableMarkerApp:
 
         self.placeholder = ctk.CTkLabel(
             ph_container,
-            text="No Source Active",
+            text="INFAC Vision Ready",
             font=ctk.CTkFont(size=22, weight="bold"),
             text_color=self.colors["text_secondary"]
         )
@@ -424,7 +435,7 @@ class CableMarkerApp:
 
         ctk.CTkLabel(
             ph_container,
-            text="Load a file or start a camera stream to begin detection",
+            text="Select a camera or load an image to start detection",
             font=ctk.CTkFont(size=12),
             text_color=self.colors["border"]
         ).pack()

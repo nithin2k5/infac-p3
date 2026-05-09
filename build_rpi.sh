@@ -1,11 +1,15 @@
 #!/bin/bash
 # ============================================================
-#  build_rpi.sh — Build Cable Marker Detector for Raspberry Pi
+#  build_rpi.sh — Build INFAC Cable Marker Vision for Raspberry Pi
 # ============================================================
 set -e
 
-echo "🍓 Building Cable Marker Detector for Raspberry Pi..."
+echo "🍓 Building INFAC Cable Marker Vision for Raspberry Pi..."
 echo ""
+
+# ── Resolve project root (the directory this script lives in) ────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 # ── Check we are on Raspberry Pi (warn, do not block) ────────────────────────
 if [ ! -f /proc/device-tree/model ] || ! grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
@@ -51,27 +55,82 @@ pyinstaller rpi.spec --clean --noconfirm
 echo ""
 if [ -f "dist/cable_marker/cable_marker" ]; then
     echo "✅ Build successful!"
-    echo "📁 Executable: dist/cable_marker/cable_marker"
+    echo "📁 Executable: $SCRIPT_DIR/dist/cable_marker/cable_marker"
     echo ""
 
-    # ── Desktop shortcut (optional) ──────────────────────────────────────────
-    DESKTOP="$HOME/Desktop"
-    if [ -d "$DESKTOP" ] && [ -f "CableMarkerDetector.desktop" ]; then
-        echo "🔗 Installing desktop shortcut..."
-        cp CableMarkerDetector.desktop "$DESKTOP/"
-        chmod +x "$DESKTOP/CableMarkerDetector.desktop"
+    # ── Fix executable permissions ────────────────────────────────────────────
+    chmod +x "$SCRIPT_DIR/dist/cable_marker/cable_marker"
+    echo "   ✔ Executable permissions set."
 
-        APPS_DIR="$HOME/.local/share/applications"
-        mkdir -p "$APPS_DIR"
-        cp CableMarkerDetector.desktop "$APPS_DIR/"
-        echo "   Shortcut placed on Desktop and in application menu."
+    # ── Create launcher wrapper script ────────────────────────────────────────
+    # This wrapper ensures DISPLAY and env vars are correct when launched
+    # from a .desktop file, autostart, or double-click — not just from a terminal.
+    LAUNCHER="$SCRIPT_DIR/launch_infac.sh"
+    cat > "$LAUNCHER" << LAUNCHER_EOF
+#!/bin/bash
+# INFAC Cable Marker Vision — launcher wrapper
+# Ensures correct environment when started from desktop / autostart.
+export DISPLAY="\${DISPLAY:-:0}"
+export XAUTHORITY="\${XAUTHORITY:-\$HOME/.Xauthority}"
+
+EXEC="$SCRIPT_DIR/dist/cable_marker/cable_marker"
+LOG="$SCRIPT_DIR/infac_launch.log"
+
+echo "[\$(date)] Starting INFAC..." >> "\$LOG"
+"\$EXEC" >> "\$LOG" 2>&1
+echo "[\$(date)] Exited with code \$?" >> "\$LOG"
+LAUNCHER_EOF
+    chmod +x "$LAUNCHER"
+    echo "   ✔ Launcher wrapper created: $LAUNCHER"
+
+    # ── Write .desktop files dynamically (no hardcoded username) ─────────────
+    DESKTOP_CONTENT="[Desktop Entry]
+Version=1.0
+Type=Application
+Name=INFAC Cable Marker Vision
+Comment=INFAC Industrial Cable Marker Detection System
+Exec=$LAUNCHER
+Path=$SCRIPT_DIR/dist/cable_marker/
+Terminal=false
+Hidden=false
+Categories=Utility;Application;
+StartupNotify=true
+X-GNOME-Autostart-enabled=true"
+
+    # ── Desktop shortcut ──────────────────────────────────────────────────────
+    DESKTOP_DIR="$HOME/Desktop"
+    if [ -d "$DESKTOP_DIR" ]; then
+        echo "$DESKTOP_CONTENT" > "$DESKTOP_DIR/INFAC-CableMarker.desktop"
+        chmod +x "$DESKTOP_DIR/INFAC-CableMarker.desktop"
+        echo "   ✔ Desktop shortcut: $DESKTOP_DIR/INFAC-CableMarker.desktop"
     fi
 
+    # ── Application menu entry ────────────────────────────────────────────────
+    APPS_DIR="$HOME/.local/share/applications"
+    mkdir -p "$APPS_DIR"
+    echo "$DESKTOP_CONTENT" > "$APPS_DIR/INFAC-CableMarker.desktop"
+    echo "   ✔ App menu entry: $APPS_DIR/INFAC-CableMarker.desktop"
+
+    # ── Autostart on boot (LXDE / Raspberry Pi OS desktop) ───────────────────
+    AUTOSTART_DIR="$HOME/.config/autostart"
+    mkdir -p "$AUTOSTART_DIR"
+    echo "$DESKTOP_CONTENT" > "$AUTOSTART_DIR/infac-cable-marker.desktop"
+    chmod +x "$AUTOSTART_DIR/infac-cable-marker.desktop"
+
     echo ""
-    echo "To run the application:"
-    echo "   ./dist/cable_marker/cable_marker"
+    echo "🚀 Autostart configured:"
+    echo "   ✔ $AUTOSTART_DIR/infac-cable-marker.desktop"
+    echo "   The INFAC app will launch automatically on every graphical login."
     echo ""
-    echo "Or double-click the desktop shortcut (if installed)."
+    echo "   To disable autostart later:"
+    echo "   rm $AUTOSTART_DIR/infac-cable-marker.desktop"
+    echo ""
+    echo "To run the application now:"
+    echo "   $LAUNCHER"
+    echo ""
+    echo "Or double-click 'INFAC-CableMarker' on the Desktop."
+    echo ""
+    echo "Launch log (for debugging): $SCRIPT_DIR/infac_launch.log"
 else
     echo "❌ Build produced no output. Check the PyInstaller logs above."
     exit 1

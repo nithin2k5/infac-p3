@@ -1,11 +1,11 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Infac Cable Marker Detector
-Comment=Launch Cable Marker Detection System
+Name=INFAC Cable Marker Vision
+Comment=INFAC Industrial Cable Marker Detection System
 Exec=/home/infactech/infac-p3/dist/cable_marker/cable_marker
 Icon=/home/infactech/infac-p3/icon.png
 Path=/home/infactech/infac-p3/dist/cable_marker/
-Terminal=true
+Terminal=false
 Categories=Utility;Application;
 StartupNotify=true
