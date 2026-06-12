@@ -538,7 +538,7 @@ class CableMarkerApp:
             new_width = int(width * scale)
             new_height = int(height * scale)
         
-            image_rgb = cv2.resize(image_rgb, (new_width, new_height), interpolation=cv2.INTER_AREA)
+            image_rgb = cv2.resize(image_rgb, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
 
             pil_image = Image.fromarray(image_rgb)
             photo = ImageTk.PhotoImage(pil_image)
@@ -885,8 +885,8 @@ class CableMarkerApp:
                 return
                 
             # Set resolution
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
             
             self.camera_active = True
             self.simulation_running = False # Reuse this flag or ensure clean state
@@ -1081,7 +1081,7 @@ class CableMarkerApp:
         try:
             self.picam2 = Picamera2(self.camera_index)
             config = self.picam2.create_video_configuration(
-                main={"format": "BGR888", "size": (1920, 1080)}
+                main={"format": "BGR888", "size": (1280, 720)}
             )
             self.picam2.configure(config)
             self.picam2.start()

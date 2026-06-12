@@ -90,7 +90,7 @@ exe = EXE(
 app = BUNDLE(
     exe,
     name='CableMarkerDetector.app',
-    icon=None,
+    icon='app_icon.icns',
     bundle_identifier='com.cablemarker.detector',
     info_plist={
         'NSCameraUsageDescription': 'Camera access required for live cable marker detection.',

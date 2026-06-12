@@ -13,6 +13,7 @@ datas += collect_data_files('ultralytics')
 
 # Bundle the YOLO weights file alongside the app
 datas += [('weights-5.pt', '.')]
+datas += [('app_icon.png', '.')]
 
 # ── Hidden imports ────────────────────────────────────────────────────────────
 hiddenimports = [

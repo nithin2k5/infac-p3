@@ -105,6 +105,7 @@ Type=Application
 Name=INFAC Cable Marker Vision
 Comment=INFAC Industrial Cable Marker Detection System
 Exec=$LAUNCHER
+Icon=$SCRIPT_DIR/dist/cable_marker/app_icon.png
 Path=$SCRIPT_DIR/dist/cable_marker/
 Terminal=false
 Hidden=false
